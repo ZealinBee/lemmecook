@@ -128,6 +128,7 @@ export function extractRecipe(html: string, sourceUrl: string): Omit<Recipe, "id
   const cook = isoMinutes(recipe.cookTime);
 
   return {
+    origin: "link",
     sourceUrl,
     siteName: clean(metaContent(html, "og:site_name")) || new URL(sourceUrl).hostname.replace(/^www\./, ""),
     title: clean(recipe.name) || "Untitled recipe",

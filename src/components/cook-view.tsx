@@ -12,11 +12,18 @@ import {
   MicIcon,
   MicOffIcon,
   SparkIcon,
+  SpeakerIcon,
+  SpeakerOffIcon,
   SunIcon,
   TimerIcon,
   UsersIcon,
 } from "@/components/icons";
+import { RecipeCard } from "@/components/recipe-card";
+import { RecipeCover } from "@/components/recipe-cover";
+import { useOpenRecipe } from "@/hooks/use-open-recipe";
 import { useRecipes } from "@/hooks/use-recipes";
+import { useSpeech } from "@/hooks/use-speech";
+import { getDefaultRecipe, suggestDefaults } from "@/lib/default-recipes";
 import { useTimers, type Timer } from "@/hooks/use-timers";
 import { useVoiceControl } from "@/hooks/use-voice-control";
 import { useWakeLock } from "@/hooks/use-wake-lock";
@@ -34,22 +41,41 @@ type Sheet = null | "ingredients" | "help";
 
 export function CookView({ id }: { id: string }) {
   const { recipes, ready } = useRecipes();
-  const recipe = recipes.find((r) => r.id === id);
+  const recipe = recipes.find((r) => r.id === id) ?? getDefaultRecipe(id);
 
+  if (recipe) return <Cook recipe={recipe} />;
   if (!ready) return <div className="min-h-dvh bg-ivory" />;
-  if (!recipe) {
-    return (
-      <main className="safe-top mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center gap-4 px-6 text-center">
+  return <NotFound />;
+}
+
+function NotFound() {
+  const { open } = useOpenRecipe();
+  return (
+    <main className="safe-top safe-bottom mx-auto flex min-h-dvh max-w-xl flex-col px-5">
+      <div className="flex flex-col items-center gap-3 pt-20 pb-10 text-center">
         <SparkIcon className="text-clay" width={28} height={28} />
         <h1 className="font-serif text-3xl">Recipe not found</h1>
         <p className="text-muted">It may have been removed from this device.</p>
-        <Link href="/" className="mt-2 rounded-full bg-ink px-6 py-3 text-sm font-medium text-ivory">
-          Add a recipe
+        <Link href="/" className="mt-3 rounded-full bg-ink px-6 py-3 text-sm font-medium text-ivory">
+          Find a recipe
         </Link>
-      </main>
-    );
-  }
-  return <Cook recipe={recipe} />;
+      </div>
+      <SuggestionGrid title="Or try one of ours" onOpen={open} />
+    </main>
+  );
+}
+
+function SuggestionGrid({ title, excludeId, onOpen }: { title: string; excludeId?: string; onOpen: (r: Recipe) => void }) {
+  return (
+    <section className="w-full text-left">
+      <h2 className="mb-3 font-serif text-[1.35rem]">{title}</h2>
+      <div className="grid grid-cols-3 gap-3">
+        {suggestDefaults(excludeId).map((r) => (
+          <RecipeCard key={r.id} recipe={r} onOpen={onOpen} />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function Cook({ recipe }: { recipe: Recipe }) {
@@ -75,20 +101,46 @@ function Cook({ recipe }: { recipe: Recipe }) {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   }, []);
 
-  const timers = useTimers((t: Timer) => flash(`${t.label} — time’s up`));
+  const speech = useSpeech();
+  const timers = useTimers((t: Timer) => {
+    flash(`${t.label} — time’s up`);
+  });
+
+  const stepScript = useCallback(
+    (i: number) => {
+      const s = recipe.steps[i];
+      if (!s) return "";
+      const prefix = i === total - 1 && total > 1 ? "Last step." : `Step ${i + 1}.`;
+      return `${prefix} ${s.section && s.section !== recipe.steps[i - 1]?.section ? `${s.section}. ` : ""}${s.text}`;
+    },
+    [recipe.steps, total],
+  );
+
+  // Only ever speaks when asked ("read aloud" or the button) — never automatically.
+  const { stop: stopSpeaking } = speech;
+
+  const repeat = useCallback(() => {
+    const { view: v, step: s } = state.current;
+    if (!speech.supported) return flash("Read aloud isn't supported in this browser");
+    if (v === "steps") speech.speak(stepScript(s));
+    else flash("Start cooking to hear the steps");
+  }, [flash, speech, stepScript]);
 
   const goTo = useCallback(
     (i: number) => {
+      stopSpeaking();
       if (i >= total) return setView("done");
       setStep(Math.max(0, i));
       setView("steps");
       setSheet(null);
     },
-    [total],
+    [total, stopSpeaking],
   );
 
   const handleTranscript = useCallback(
     (text: string) => {
+      // The mic hears the speaker too — don't act on our own words.
+      if (speech.isEcho(text)) return;
       const cmd = parseCommand(text);
       // Long phrases without a command are usually background chatter.
       if (!cmd) {
@@ -122,11 +174,15 @@ function Cook({ recipe }: { recipe: Recipe }) {
           if (!running.length) return flash("No timers running");
           return flash(running.map((t) => `${t.label}: ${formatClock(timers.remaining(t))}`).join(" · "));
         }
+        case "repeat":
+          return repeat();
+        case "quiet":
+          return speech.stop();
         case "help":
           return setSheet("help");
       }
     },
-    [flash, goTo, timers, total],
+    [flash, goTo, timers, total, repeat, speech],
   );
 
   const voice = useVoiceControl(handleTranscript);
@@ -186,6 +242,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
           onPrev={() => goTo(step - 1)}
           onNext={() => goTo(step + 1)}
           onClose={() => setView("overview")}
+          speech={speech.supported ? { speaking: speech.speaking, onRead: repeat, onStop: stopSpeaking } : undefined}
           onTimer={(secs, label) => {
             timers.add(secs, label);
             flash(`Timer set · ${formatClock(secs)}`);
@@ -232,6 +289,12 @@ function Cook({ recipe }: { recipe: Recipe }) {
             ["“Set a timer for 10 minutes”", "Starts a countdown"],
             ["“How long is left?”", "Show remaining time"],
             ["“Cancel timer”", "Stops the latest timer"],
+            ...(speech.supported
+              ? [
+                  ["“Read aloud” / “Repeat”", "Reads the step aloud"],
+                  ["“Stop” / “Quiet”", "Stops reading"],
+                ]
+              : []),
           ].map(([phrase, what]) => (
             <li key={phrase} className="flex items-baseline justify-between gap-4 rounded-2xl bg-paper px-4 py-3">
               <span className="font-serif text-[1.05rem]">{phrase}</span>
@@ -283,25 +346,24 @@ function Overview({
       </div>
 
       <div className="px-4">
-        {recipe.image && (
-          // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts
-          <img
-            src={recipe.image}
-            alt=""
-            className="rise aspect-[4/3] w-full rounded-[1.75rem] bg-oat object-cover"
-          />
+        {(recipe.image || recipe.origin === "builtin") && (
+          <RecipeCover recipe={recipe} variant="plain" className="rise aspect-[4/3] w-full rounded-[1.75rem]" />
         )}
 
         <header className="rise mt-6" style={{ animationDelay: "60ms" }}>
-          <a
-            href={recipe.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs font-medium tracking-[0.12em] text-clay uppercase"
-          >
-            {recipe.siteName}
-            {recipe.author && <span className="text-muted normal-case tracking-normal"> · {recipe.author}</span>}
-          </a>
+          {recipe.sourceUrl ? (
+            <a
+              href={recipe.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-medium tracking-[0.12em] text-clay uppercase"
+            >
+              {recipe.siteName}
+              {recipe.author && <span className="text-muted normal-case tracking-normal"> · {recipe.author}</span>}
+            </a>
+          ) : (
+            <p className="text-xs font-medium tracking-[0.12em] text-clay uppercase">{recipe.siteName}</p>
+          )}
           <h1 className="mt-2 font-serif text-[2.2rem] leading-[1.08] tracking-[-0.015em]">{recipe.title}</h1>
           {recipe.description && (
             <p className="mt-3 line-clamp-3 leading-relaxed text-muted">{recipe.description}</p>
@@ -359,7 +421,9 @@ function Overview({
             <MicIcon width={20} height={20} />
             Start cooking · {recipe.steps.length} steps
           </button>
-          <p className="mt-2 text-center text-xs text-muted">Voice control turns on when you start</p>
+          <p className="mt-2 text-center text-xs text-muted">
+            Voice control turns on when you start · say “read aloud” to hear a step
+          </p>
         </div>
       </div>
     </main>
@@ -373,6 +437,7 @@ function StepView({
   onNext,
   onClose,
   onTimer,
+  speech,
   controls,
 }: {
   recipe: Recipe;
@@ -381,6 +446,7 @@ function StepView({
   onNext: () => void;
   onClose: () => void;
   onTimer: (seconds: number, label: string) => void;
+  speech?: { speaking: boolean; onRead: () => void; onStop: () => void };
   controls: ReactNode;
 }) {
   const s = recipe.steps[step];
@@ -445,8 +511,22 @@ function StepView({
           </span>
           <p className={`mt-2 font-serif tracking-[-0.01em] text-ink ${size}`}>{s.text}</p>
 
-          {chips.length > 0 && (
+          {(chips.length > 0 || speech) && (
             <div className="mt-8 flex flex-wrap gap-2">
+              {speech && (
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerUp={(e) => e.stopPropagation()}
+                  onClick={speech.speaking ? speech.onStop : speech.onRead}
+                  aria-pressed={speech.speaking}
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium transition active:scale-[0.97] ${
+                    speech.speaking ? "border-clay/40 bg-clay-wash text-clay-deep" : "border-line bg-card text-ink-soft"
+                  }`}
+                >
+                  {speech.speaking ? <SpeakerOffIcon width={16} height={16} /> : <SpeakerIcon width={16} height={16} />}
+                  {speech.speaking ? "Stop reading" : "Read aloud"}
+                </button>
+              )}
               {chips.map((c) => (
                 <button
                   key={c.seconds}
@@ -476,6 +556,7 @@ function StepView({
 }
 
 function DoneView({ recipe, onBack, onRestart }: { recipe: Recipe; onBack: () => void; onRestart: () => void }) {
+  const { open } = useOpenRecipe();
   return (
     <main className="safe-top safe-bottom mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center px-6 text-center">
       <div className="rise grid size-20 place-items-center rounded-full bg-clay-wash">
@@ -497,6 +578,9 @@ function DoneView({ recipe, onBack, onRestart }: { recipe: Recipe; onBack: () =>
         <button onClick={onRestart} className="h-12 rounded-full text-sm text-muted active:bg-oat">
           Start over
         </button>
+      </div>
+      <div className="rise mt-12 w-full" style={{ animationDelay: "260ms" }}>
+        <SuggestionGrid title="Cook next" excludeId={recipe.id} onOpen={open} />
       </div>
     </main>
   );

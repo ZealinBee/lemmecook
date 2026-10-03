@@ -28,7 +28,7 @@ export function getRecipe(id: string): Recipe | undefined {
 }
 
 export function saveRecipe(recipe: Recipe) {
-  const rest = readAll().filter((r) => r.id !== recipe.id && r.sourceUrl !== recipe.sourceUrl);
+  const rest = readAll().filter((r) => r.id !== recipe.id && (!recipe.sourceUrl || r.sourceUrl !== recipe.sourceUrl));
   try {
     localStorage.setItem(KEY, JSON.stringify([recipe, ...rest].slice(0, MAX)));
     emit();

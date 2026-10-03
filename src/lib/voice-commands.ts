@@ -7,6 +7,8 @@ export type Command =
   | { type: "timer"; seconds: number; label?: string }
   | { type: "cancel-timer" }
   | { type: "time-left" }
+  | { type: "repeat" }
+  | { type: "quiet" }
   | { type: "help" };
 
 const WORD_NUMBERS: Record<string, number> = {
@@ -84,6 +86,14 @@ export function parseCommand(transcript: string): Command | null {
     if (n) return { type: "goto", step: n };
   }
 
+  if (/\bread\b/.test(t) && /\bingredients?\b/.test(t)) return { type: "ingredients" };
+  // "read aloud", "read it out", "read the instructions", "say it", "speak"… → read the current step.
+  if (
+    /\b(repeat|again|what was that|pardon|come again|read|reed|speak|say (it|that|this)|tell me|out loud|aloud)\b/.test(t)
+  )
+    return { type: "repeat" };
+  if (/^(stop|quiet|hush|shush|silence|be quiet|stop talking|shut up)\b/.test(t)) return { type: "quiet" };
+
   if (/\b(ingredients?|what do i need|shopping)\b/.test(t)) return { type: "ingredients" };
   if (/\b(next|continue|done|forward|okay next|got it)\b/.test(t)) return { type: "next" };
   if (/\b(back|previous|go back|last one|before)\b/.test(t)) return { type: "previous" };
@@ -92,15 +102,49 @@ export function parseCommand(transcript: string): Command | null {
   return null;
 }
 
+const FRACTIONS: Record<string, number> = { "½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3 };
+// 1 · 1.5 · ½ · 1½ · 1 ½ · 1 1/2 · 1/2
+const NUM = String.raw`(?:\d+(?:\.\d+)?(?:\s*(?:[½¼¾⅓⅔]|\d\/\d))?|[½¼¾⅓⅔]|\d\/\d)`;
+const STEP_UNIT = String.raw`(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b`;
+const STEP_DURATION = new RegExp(
+  // "1 hour 30 minutes", "1 hr and 15 mins", "10-12 minutes", "1½ hours", "1 hour and a half"
+  String.raw`(${NUM})(?:\s*(?:-|–|to)\s*(${NUM}))?\s*${STEP_UNIT}` +
+    String.raw`(?:,?\s*(?:and\s+)?(?:(${NUM})\s*${STEP_UNIT}|(a half)\b))?`,
+  "gi",
+);
+
+function parseNum(raw: string): number {
+  const s = raw.trim();
+  const frac = s.match(/(\d)\/(\d)$/);
+  const uni = s.match(/[½¼¾⅓⅔]$/);
+  const whole = Number(s.match(/^\d+(?:\.\d+)?(?=\s|[½¼¾⅓⅔]|$)/)?.[0] ?? 0);
+  if (frac) return (s.includes(" ") ? whole : 0) + Number(frac[1]) / Number(frac[2]);
+  if (uni) return whole + FRACTIONS[uni[0]];
+  return Number(s);
+}
+
+/** Compact chip label: 5400 → "1 hr 30 min", 90 → "1 min 30 sec". */
+export function formatShortDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.round(totalSeconds % 60);
+  return [h && `${h} hr`, m && `${m} min`, s && `${s} sec`].filter(Boolean).join(" ") || "0 sec";
+}
+
 /** Find durations mentioned in a recipe step, for one-tap timer chips. */
 export function findStepTimers(text: string): { label: string; seconds: number }[] {
   const out: { label: string; seconds: number }[] = [];
-  const re = /(\d+(?:\.\d+)?)(?:\s*(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b/gi;
-  for (const m of text.matchAll(re)) {
+  for (const m of text.matchAll(STEP_DURATION)) {
+    const [, from, to, unit, extraNum, extraUnit, andAHalf] = m;
+    const base = unitSeconds(unit.toLowerCase());
     // For ranges like "10-12 minutes", use the upper bound.
-    const n = Number(m[2] ?? m[1]);
-    const seconds = Math.round(n * unitSeconds(m[3].toLowerCase()));
-    if (seconds > 0 && !out.some((o) => o.seconds === seconds)) out.push({ label: m[0], seconds });
+    let seconds = parseNum(to ?? from) * base;
+    if (extraNum && extraUnit) seconds += parseNum(extraNum) * unitSeconds(extraUnit.toLowerCase());
+    if (andAHalf) seconds += base / 2;
+    seconds = Math.round(seconds);
+    if (seconds > 0 && !out.some((o) => o.seconds === seconds)) {
+      out.push({ label: formatShortDuration(seconds), seconds });
+    }
   }
   return out;
 }
