@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AppIcon, ArrowRightIcon, ListIcon, MicIcon, SunIcon, TimerIcon } from "@/components/icons";
+import { AppIcon, ArrowRightIcon, ListIcon } from "@/components/icons";
 import { RecipeRow } from "@/components/recipe-card";
 import { SearchBar } from "@/components/search-bar";
 import { looksLikeUrl, useOpenRecipe } from "@/hooks/use-open-recipe";
@@ -174,19 +174,6 @@ export default function Home() {
           </ul>
         </section>
       )}
-
-      <ul className="mt-12 grid grid-cols-3 gap-2 px-5">
-        {[
-          { icon: MicIcon, label: "Say “next” or “back”" },
-          { icon: TimerIcon, label: "“Set a timer for 5 minutes”" },
-          { icon: SunIcon, label: "Screen stays awake" },
-        ].map(({ icon: Icon, label }) => (
-          <li key={label} className="rounded-2xl bg-paper p-3.5">
-            <Icon className="text-clay" width={20} height={20} />
-            <p className="mt-2 text-[0.8rem] leading-snug text-ink-soft">{label}</p>
-          </li>
-        ))}
-      </ul>
 
       <footer className="mt-auto px-5 pt-10 text-center text-xs text-muted">
         Search powered by TheMealDB. Allow the microphone for voice control.

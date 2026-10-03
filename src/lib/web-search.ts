@@ -23,8 +23,46 @@ const SITES: { host: string; name: string; plugin: "wprm" | "tasty" }[] = [
   { host: "hebbarskitchen.com", name: "Hebbars Kitchen", plugin: "wprm" },
   { host: "www.themediterraneandish.com", name: "The Mediterranean Dish", plugin: "wprm" },
   { host: "www.mexicoinmykitchen.com", name: "Mexico in My Kitchen", plugin: "wprm" },
+  { host: "downshiftology.com", name: "Downshiftology", plugin: "wprm" },
+  { host: "hot-thai-kitchen.com", name: "Hot Thai Kitchen", plugin: "wprm" },
+  { host: "iamafoodblog.com", name: "I Am a Food Blog", plugin: "wprm" },
+  { host: "omnivorescookbook.com", name: "Omnivore's Cookbook", plugin: "wprm" },
+  { host: "rainbowplantlife.com", name: "Rainbow Plant Life", plugin: "wprm" },
+  { host: "rasamalaysia.com", name: "Rasa Malaysia", plugin: "wprm" },
+  { host: "thecozycook.com", name: "The Cozy Cook", plugin: "wprm" },
+  { host: "thestayathomechef.com", name: "The Stay at Home Chef", plugin: "wprm" },
+  { host: "www.averiecooks.com", name: "Averie Cooks", plugin: "wprm" },
+  { host: "www.biggerbolderbaking.com", name: "Bigger Bolder Baking", plugin: "wprm" },
+  { host: "www.carlsbadcravings.com", name: "Carlsbad Cravings", plugin: "wprm" },
+  { host: "www.chelseasmessyapron.com", name: "Chelsea's Messy Apron", plugin: "wprm" },
+  { host: "www.daringgourmet.com", name: "The Daring Gourmet", plugin: "wprm" },
+  { host: "www.dinneratthezoo.com", name: "Dinner at the Zoo", plugin: "wprm" },
+  { host: "www.foodiecrush.com", name: "Foodie Crush", plugin: "wprm" },
+  { host: "www.jessicagavin.com", name: "Jessica Gavin", plugin: "wprm" },
+  { host: "www.jocooks.com", name: "Jo Cooks", plugin: "wprm" },
+  { host: "www.joyfoodsunshine.com", name: "JoyFoodSunshine", plugin: "wprm" },
+  { host: "www.kitchentreaty.com", name: "Kitchen Treaty", plugin: "wprm" },
+  { host: "www.lecremedelacrumb.com", name: "Creme de la Crumb", plugin: "wprm" },
+  { host: "www.lifemadesimplebakes.com", name: "Life Made Simple", plugin: "wprm" },
+  { host: "www.loveandlemons.com", name: "Love and Lemons", plugin: "wprm" },
+  { host: "www.melskitchencafe.com", name: "Mel's Kitchen Cafe", plugin: "wprm" },
+  { host: "www.momontimeout.com", name: "Mom On Timeout", plugin: "wprm" },
+  { host: "www.noracooks.com", name: "Nora Cooks", plugin: "wprm" },
+  { host: "www.preppykitchen.com", name: "Preppy Kitchen", plugin: "wprm" },
+  { host: "www.recipegirl.com", name: "Recipe Girl", plugin: "wprm" },
+  { host: "www.saltandlavender.com", name: "Salt & Lavender", plugin: "wprm" },
+  { host: "www.simplyquinoa.com", name: "Simply Quinoa", plugin: "wprm" },
+  { host: "www.sugarspunrun.com", name: "Sugar Spun Run", plugin: "wprm" },
+  { host: "www.tastesbetterfromscratch.com", name: "Tastes Better From Scratch", plugin: "wprm" },
+  { host: "www.the-girl-who-ate-everything.com", name: "The Girl Who Ate Everything", plugin: "wprm" },
+  { host: "www.thechunkychef.com", name: "The Chunky Chef", plugin: "wprm" },
+  { host: "www.twopeasandtheirpod.com", name: "Two Peas & Their Pod", plugin: "wprm" },
+  { host: "www.wellplated.com", name: "Well Plated", plugin: "wprm" },
+  { host: "www.yellowblissroad.com", name: "Yellow Bliss Road", plugin: "wprm" },
   { host: "cookieandkate.com", name: "Cookie and Kate", plugin: "tasty" },
   { host: "pinchofyum.com", name: "Pinch of Yum", plugin: "tasty" },
+  { host: "sallysbakingaddiction.com", name: "Sally's Baking Addiction", plugin: "tasty" },
+  { host: "www.feastingathome.com", name: "Feasting at Home", plugin: "tasty" },
 ];
 
 type Site = (typeof SITES)[number];
@@ -170,14 +208,16 @@ function hash(s: string): string {
 }
 
 /** Search recipe blogs across the web for a dish. */
-export async function searchWeb(query: string, limit = 12): Promise<Recipe[]> {
+export async function searchWeb(query: string, limit = 24): Promise<Recipe[]> {
   const terms = wordsOf(query);
   if (!terms.length) return [];
   const perSite = await Promise.all(SITES.map((s) => searchSite(s, query, terms).catch(() => [])));
+  // Fewer extra words in the title is a closer match: "Lasagna" over "Spinach Mushroom Lasagna Roll-Ups".
+  const closest = (l: (Found | undefined)[]) =>
+    l.filter((r): r is Found => Boolean(r)).sort((a, b) => wordsOf(a.title).length - wordsOf(b.title).length);
   // Interleave so one site doesn't fill the page: first hit from each, then second hits.
   const seen = new Set<string>();
-  return [...perSite.map((l) => l[0]), ...perSite.map((l) => l[1])]
-    .filter((r): r is Found => Boolean(r))
+  return [...closest(perSite.map((l) => l[0])), ...closest(perSite.map((l) => l[1]))]
     // A post can hold more than one recipe card; one per post is plenty.
     .filter((r) => !seen.has(r.sourceUrl!) && Boolean(seen.add(r.sourceUrl!)))
     .slice(0, limit)
