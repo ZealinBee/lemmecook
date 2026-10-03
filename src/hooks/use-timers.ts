@@ -10,28 +10,53 @@ export type Timer = {
   done: boolean;
 };
 
-function chime() {
+type Tone = { freq: number; at: number; peak: number; len: number };
+
+function play(tones: Tone[]) {
   try {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();
-    const notes = [880, 1174.66, 1567.98];
-    for (let round = 0; round < 3; round++) {
-      notes.forEach((freq, i) => {
-        const t = ctx.currentTime + round * 0.9 + i * 0.16;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(t);
-        osc.stop(t + 0.55);
-      });
+    for (const { freq, at, peak, len } of tones) {
+      const t = ctx.currentTime + at;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + len + 0.05);
     }
-    setTimeout(() => ctx.close(), 3500);
+    const end = Math.max(...tones.map((t) => t.at + t.len));
+    setTimeout(() => ctx.close(), end * 1000 + 300);
   } catch {}
+}
+
+// Soft rising two-note blip to confirm a timer started.
+function blip() {
+  play([
+    { freq: 659.25, at: 0, peak: 0.18, len: 0.12 },
+    { freq: 987.77, at: 0.09, peak: 0.18, len: 0.18 },
+  ]);
+}
+
+// Mirror of blip, falling, to confirm a timer was cancelled.
+function unblip() {
+  play([
+    { freq: 987.77, at: 0, peak: 0.18, len: 0.12 },
+    { freq: 659.25, at: 0.09, peak: 0.18, len: 0.18 },
+  ]);
+}
+
+function chime() {
+  const notes = [880, 1174.66, 1567.98];
+  play(
+    [0, 1, 2].flatMap((round) =>
+      notes.map((freq, i) => ({ freq, at: round * 0.9 + i * 0.16, peak: 0.35, len: 0.5 })),
+    ),
+  );
   navigator.vibrate?.([300, 120, 300, 120, 300]);
 }
 
@@ -76,10 +101,14 @@ export function useTimers(onDone: (t: Timer) => void) {
     };
     setNow(Date.now());
     setTimers((prev) => [...prev, t]);
+    blip();
     return t;
   }, []);
 
-  const remove = useCallback((id: string) => setTimers((prev) => prev.filter((t) => t.id !== id)), []);
+  const remove = useCallback((id: string) => {
+    if (timersRef.current.some((t) => t.id === id && !t.done)) unblip();
+    setTimers((prev) => prev.filter((t) => t.id !== id));
+  }, []);
   const clearAll = useCallback(() => setTimers([]), []);
   const remaining = useCallback((t: Timer) => Math.max(0, (t.endsAt - now) / 1000), [now]);
 

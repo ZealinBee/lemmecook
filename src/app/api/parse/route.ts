@@ -1,21 +1,20 @@
 import { extractRecipe } from "@/lib/parse-recipe";
 import { extractRussianFood } from "@/lib/sites/russianfood";
+import { BROWSER_HEADERS, decodeHtml, PRIVATE_HOST } from "@/lib/fetch-page";
 
-const PRIVATE_HOST =
-  /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?|\[?f[cd][0-9a-f]{2}:)/i;
-
-/** Honour the page's charset — older sites (e.g. russianfood.com) still serve windows-1251. */
-function decodeHtml(buf: ArrayBuffer, contentType: string | null): string {
-  const sniff = new TextDecoder("latin1").decode(buf.slice(0, 4096));
-  const charset =
-    contentType?.match(/charset=["']?([\w-]+)/i)?.[1] ??
-    sniff.match(/<meta[^>]+charset=["']?([\w-]+)/i)?.[1] ??
-    "utf-8";
-  try {
-    return new TextDecoder(charset).decode(buf);
-  } catch {
-    return new TextDecoder("utf-8").decode(buf);
-  }
+/** "/recipe/24074/alysias-basic-meat-lasagna/" → "alysias basic meat lasagna". */
+function dishFromUrl(url: URL): string | undefined {
+  const slug = url.pathname
+    .split("/")
+    .map((s) => decodeURIComponent(s).replace(/\.\w+$/, ""))
+    .filter((s) => /[-_]/.test(s) && /[a-z]/i.test(s))
+    .sort((a, b) => b.length - a.length)[0];
+  const dish = slug
+    ?.replace(/[-_]/g, " ")
+    .replace(/\b(\d+|recipes?)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return dish || undefined;
 }
 
 export async function POST(request: Request) {
@@ -33,12 +32,7 @@ export async function POST(request: Request) {
   let html: string;
   try {
     const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
+      headers: BROWSER_HEADERS,
       redirect: "follow",
       signal: AbortSignal.timeout(12_000),
     });
@@ -48,7 +42,7 @@ export async function POST(request: Request) {
     if (!res.ok) {
       // 401/402/403/429/503 from a live page almost always means a bot wall, not a broken link.
       return Response.json(
-        { error: "This site doesn't let apps read its pages.", tryInBrowser: true },
+        { error: "This site doesn't let apps read its recipes.", suggestPaste: true, dish: dishFromUrl(url) },
         { status: 502 },
       );
     }
@@ -60,8 +54,7 @@ export async function POST(request: Request) {
   const recipe = extractRecipe(html, url.toString()) ?? extractRussianFood(html, url.toString());
   if (!recipe) {
     return Response.json(
-      // Could be a roundup, or a page that only renders its recipe with JavaScript.
-      { error: "No recipe found on that page. Try the recipe's own page rather than a roundup.", tryInBrowser: true },
+      { error: "No recipe found on that page. Try the recipe's own page rather than a roundup.", suggestPaste: true },
       { status: 422 },
     );
   }

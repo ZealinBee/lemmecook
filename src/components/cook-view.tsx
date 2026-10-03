@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -23,6 +23,7 @@ import { RecipeCover } from "@/components/recipe-cover";
 import { useOpenRecipe } from "@/hooks/use-open-recipe";
 import { useRecipes } from "@/hooks/use-recipes";
 import { useSpeech } from "@/hooks/use-speech";
+import { detectLanguage, stepPrefix } from "@/lib/language";
 import { getDefaultRecipe, suggestDefaults } from "@/lib/default-recipes";
 import { useTimers, type Timer } from "@/hooks/use-timers";
 import { useVoiceControl } from "@/hooks/use-voice-control";
@@ -106,14 +107,16 @@ function Cook({ recipe }: { recipe: Recipe }) {
     flash(`${t.label} — time’s up`);
   });
 
+  const lang = useMemo(() => detectLanguage(recipe.steps.map((s) => s.text).join(" ")), [recipe.steps]);
+
   const stepScript = useCallback(
     (i: number) => {
       const s = recipe.steps[i];
       if (!s) return "";
-      const prefix = i === total - 1 && total > 1 ? "Last step." : `Step ${i + 1}.`;
+      const prefix = stepPrefix(lang, i, i === total - 1 && total > 1);
       return `${prefix} ${s.section && s.section !== recipe.steps[i - 1]?.section ? `${s.section}. ` : ""}${s.text}`;
     },
-    [recipe.steps, total],
+    [recipe.steps, total, lang],
   );
 
   // Only ever speaks when asked ("read aloud" or the button) — never automatically.
@@ -122,9 +125,9 @@ function Cook({ recipe }: { recipe: Recipe }) {
   const repeat = useCallback(() => {
     const { view: v, step: s } = state.current;
     if (!speech.supported) return flash("Read aloud isn't supported in this browser");
-    if (v === "steps") speech.speak(stepScript(s));
+    if (v === "steps") speech.speak(stepScript(s), lang);
     else flash("Start cooking to hear the steps");
-  }, [flash, speech, stepScript]);
+  }, [flash, speech, stepScript, lang]);
 
   const goTo = useCallback(
     (i: number) => {
@@ -157,6 +160,8 @@ function Cook({ recipe }: { recipe: Recipe }) {
           return goTo(cmd.step === -1 ? total - 1 : Math.min(cmd.step, total) - 1);
         case "ingredients":
           return setSheet("ingredients");
+        case "close":
+          return setSheet(null);
         case "steps":
           return goTo(s);
         case "timer":
@@ -186,6 +191,15 @@ function Cook({ recipe }: { recipe: Recipe }) {
   );
 
   const voice = useVoiceControl(handleTranscript);
+
+  // While we read aloud the mic hears the speaker and Chrome holds that utterance open long after
+  // we stop, swallowing whatever the cook says next. Start a fresh session once reading ends.
+  const { reset: resetVoice } = voice;
+  const wasSpeaking = useRef(false);
+  useEffect(() => {
+    if (wasSpeaking.current && !speech.speaking) resetVoice();
+    wasSpeaking.current = speech.speaking;
+  }, [speech.speaking, resetVoice]);
 
   function startCooking(at = 0) {
     if (voice.supported && !voice.listening) voice.start();
@@ -286,6 +300,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
             ["“Back”", "Previous step"],
             ["“Go to step 4”", "Jump to a step"],
             ["“Ingredients”", "Show the list"],
+            ["“Close”", "Hide the list"],
             ["“Set a timer for 10 minutes”", "Starts a countdown"],
             ["“How long is left?”", "Show remaining time"],
             ["“Cancel timer”", "Stops the latest timer"],

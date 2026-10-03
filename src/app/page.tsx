@@ -9,7 +9,7 @@ import { SearchBar } from "@/components/search-bar";
 import { looksLikeUrl, useOpenRecipe } from "@/hooks/use-open-recipe";
 import { useRecipes } from "@/hooks/use-recipes";
 import { CATEGORIES, DEFAULT_RECIPES } from "@/lib/default-recipes";
-import { parseRecipeText } from "@/lib/parse-text";
+import { looksLikeRoundup, parseRecipeText } from "@/lib/parse-text";
 import { removeRecipe } from "@/lib/storage";
 
 const QUICK = DEFAULT_RECIPES.filter((r) => (r.totalMinutes ?? 99) <= 20);
@@ -23,7 +23,7 @@ function looksLikeRecipeText(text: string) {
 export default function Home() {
   const router = useRouter();
   const { recipes } = useRecipes();
-  const { open, importLink, importing, error, setError, tryInBrowser } = useOpenRecipe();
+  const { open, importLink, importing, error, setError, suggestPaste } = useOpenRecipe();
   const [query, setQuery] = useState("");
   const [textMode, setTextMode] = useState(false);
   const [text, setText] = useState("");
@@ -43,7 +43,13 @@ export default function Home() {
 
   function cookText() {
     const parsed = parseRecipeText(text);
-    if (!parsed) return setError("Couldn't find ingredients or steps in that text.");
+    if (!parsed) {
+      return setError(
+        looksLikeRoundup(text)
+          ? "That's a list of recipes, not a recipe. Open the one you want and copy its ingredients and steps."
+          : "Couldn't find a recipe in that text. Copy the part with the ingredients and steps.",
+      );
+    }
     open({ ...parsed, id: crypto.randomUUID().slice(0, 8), savedAt: Date.now() });
   }
 
@@ -117,12 +123,9 @@ export default function Home() {
         {error && (
           <div role="alert" className="mt-3 rounded-2xl bg-clay-wash px-4 py-3 text-sm text-clay-deep">
             <p>{error}</p>
-            {tryInBrowser && !textMode && (
+            {suggestPaste && !textMode && (
               <p className="mt-2">
-                <Link href="/import" className="font-medium underline underline-offset-4">
-                  Open it with the bookmark
-                </Link>{" "}
-                or{" "}
+                Copy the recipe from the site and{" "}
                 <button
                   onClick={() => {
                     setError(null);
@@ -130,7 +133,7 @@ export default function Home() {
                   }}
                   className="font-medium underline underline-offset-4"
                 >
-                  paste the recipe text
+                  paste it here
                 </button>
                 .
               </p>
@@ -209,10 +212,6 @@ export default function Home() {
 
       <footer className="mt-auto px-5 pt-10 text-center text-xs text-muted">
         Search powered by TheMealDB. Allow the microphone for voice control.
-        <br />
-        <Link href="/import" className="mt-2 inline-block underline decoration-line underline-offset-4">
-          A recipe site won&apos;t load? Get the bookmark
-        </Link>
       </footer>
     </main>
   );

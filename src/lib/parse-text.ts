@@ -38,7 +38,39 @@ function stripBullet(line: string): string {
 function subheading(line: string): string | undefined {
   const s = line.replace(/^#+\s*/, "").replace(/^[*_]+|[*_]+$/g, "").trim();
   if (s.length <= 50 && /:$/.test(s) && !/\d/.test(s)) return s.replace(/:$/, "");
+  // Recipe cards often drop the colon: "For the cheese layer".
+  if (s.length <= 40 && /^for (the )?\p{L}/iu.test(s) && !/\d/.test(s)) return s;
   return undefined;
+}
+
+/** Buttons, bylines and photo credits that come along when you copy a whole web page. */
+const JUNK = [
+  /^(save|saved|print|share|pin|pin it|rate|rate it|rate this recipe|jump to recipe|view recipe|get the recipe|add us on|advertisement|ad|skip to content|sign in|log in|subscribe|read more|see more|comments?|reviews?|cook mode|save all recipes|watch now)$/i,
+  /^(credit|photo|photos|photographer|food styling|prop styling|image)\b.*:/i,
+  /^by\b.{1,60}\b(published|updated)\b/i,
+  /^(published|updated|last updated)\b.*\d{4}$/i,
+  /^new!/i,
+  /^\d{1,2}$/,
+  /^of \d{1,2}$/i,
+  // Recipe-card controls: servings scaler ("1/2x", "1x 2x 3x"), unit toggles, ratings.
+  /^(scale:?\s*)?(\d+(\/\d+)?\s*[x×]\s*)+$/i,
+  /^(us customary|us|metric|imperial)(\s*[–—|/-]\s*(us customary|us|metric|imperial))*$/i,
+  /^(print|pin|rate|save|email|share|text) (this )?recipe$/i,
+  /^\d(\.\d+)? from \d+ votes?$/i,
+  /^\d+ (votes?|ratings?|reviews?|comments?)$/i,
+  /^(cook mode|prevent (your )?screen from (going dark|sleeping))/i,
+];
+
+const isJunk = (line: string) => JUNK.some((re) => re.test(line));
+
+/**
+ * A listicle ("15 Creamy Pasta Recipes…") rather than a recipe: numbered "01 of 15" entries,
+ * or several "View Recipe" links.
+ */
+export function looksLikeRoundup(input: string): boolean {
+  const counters = input.match(/^\s*\d{1,2}\s*\n?\s*of\s+\d{1,2}\s*$/gim)?.length ?? 0;
+  const links = input.match(/^\s*(view|get) (the )?recipe\s*$/gim)?.length ?? 0;
+  return counters >= 2 || links >= 2;
 }
 
 const QUANTITY = /^(?:\d|[½¼¾⅓⅔⅛]|(?:a|an|one|two|three|four|half|pinch|dash|handful|few|some|salt|pepper)\b)/i;
@@ -54,6 +86,7 @@ function minutesAfter(text: string, label: RegExp): number | undefined {
 }
 
 export function parseRecipeText(input: string): Parsed | null {
+  if (looksLikeRoundup(input)) return null;
   const lines = input
     .replace(/\r\n?/g, "\n")
     .split("\n")
@@ -76,6 +109,7 @@ export function parseRecipeText(input: string): Parsed | null {
       sawHeader = true;
       continue;
     }
+    if (isJunk(raw)) continue;
     if (mode === "intro") {
       if (!title && raw.length <= 120) title = stripMarkup(raw);
       else intro.push(raw);
@@ -89,7 +123,7 @@ export function parseRecipeText(input: string): Parsed | null {
       continue;
     }
     const line = stripBullet(raw);
-    if (!line || /^step\s*\d+$/i.test(line)) continue;
+    if (!line || /^step\s*\d+$/i.test(line) || !/\p{L}{2,}/u.test(line)) continue;
     if (mode === "ingredients") ingredients.push(line);
     else steps.push({ text: line, section });
   }
@@ -103,6 +137,9 @@ export function parseRecipeText(input: string): Parsed | null {
       if (!steps.length && looksLikeIngredient(line)) ingredients.push(line);
       else steps.push({ text: line });
     }
+    // Guessing by shape only works on something recipe-shaped: real quantities, then sentences.
+    // Without that, any article or comment thread would "parse" into dozens of steps.
+    if (ingredients.filter((l) => QUANTITY.test(l)).length < 2 || !steps.length) return null;
   }
 
   // "Instructions" header but no "Ingredients" one: the list sits in the intro.

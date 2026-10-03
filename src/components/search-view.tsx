@@ -12,23 +12,32 @@ import type { Recipe } from "@/lib/types";
 
 type Status = "idle" | "loading" | "done" | "error";
 
-export function SearchView({ initialQuery }: { initialQuery: string }) {
+export function SearchView({ initialQuery, blockedSite }: { initialQuery: string; blockedSite?: string }) {
   const router = useRouter();
-  const { open, importLink, importing, error: importError, tryInBrowser } = useOpenRecipe();
+  const { open, importLink, importing, error: importError, suggestPaste } = useOpenRecipe();
   const [input, setInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<Recipe[]>([]);
   const [status, setStatus] = useState<Status>("idle");
+  /** We came here because this site refused a link; the query is the dish named in that link. */
+  const [blocked, setBlocked] = useState(blockedSite);
+  /** What the server actually searched for — a blocked link's slug gets whittled down to the dish. */
+  const [matched, setMatched] = useState(initialQuery);
   const latest = useRef(0);
+  const [web, setWeb] = useState<Recipe[]>([]);
+  const [webStatus, setWebStatus] = useState<Status>("idle");
+  const latestWeb = useRef(0);
 
-  const run = useCallback(async (q: string) => {
+  const run = useCallback(async (q: string, loose: boolean) => {
     const id = ++latest.current;
     setStatus("loading");
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-      const data = (await res.json()) as { recipes?: Recipe[]; error?: string };
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}${loose ? "&loose" : ""}`);
+      const data = (await res.json()) as { query?: string; recipes?: Recipe[]; error?: string };
       if (id !== latest.current) return;
       if (!res.ok) throw new Error(data.error);
+      setMatched(data.query ?? q);
+      if (loose && data.query) setInput(data.query);
       setResults(data.recipes ?? []);
       setStatus("done");
     } catch {
@@ -36,20 +45,53 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
     }
   }, []);
 
+  /** Recipe blogs, searched separately because it's slower than our recipe database. */
+  const runWeb = useCallback(async (q: string) => {
+    const id = ++latestWeb.current;
+    setWebStatus("loading");
+    try {
+      const res = await fetch(`/api/search/web?q=${encodeURIComponent(q)}`);
+      const data = (await res.json()) as { recipes?: Recipe[] };
+      if (id !== latestWeb.current) return;
+      if (!res.ok) throw new Error();
+      setWeb(data.recipes ?? []);
+      setWebStatus("done");
+    } catch {
+      if (id === latestWeb.current) setWebStatus("error");
+    }
+  }, []);
+
+  // A blocked link's slug has to be whittled down to the dish first; wait for that.
+  const webQuery = blocked ? (status === "done" ? matched : "") : query;
+  useEffect(() => {
+    if (!webQuery) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- kicking off a fetch for the current query
+    runWeb(webQuery);
+  }, [webQuery, runWeb]);
+
   // Sync from the URL (initial load and category taps) to the search.
   useEffect(() => {
     if (!query) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- kicking off a fetch for the current query
-    run(query);
-  }, [query, run]);
+    run(query, !!blocked);
+  }, [query, blocked, run]);
 
   function submit(value: string) {
     if (looksLikeUrl(value)) return importLink(value);
+    setBlocked(undefined);
     setQuery(value);
     router.replace(`/search?q=${encodeURIComponent(value)}`, { scroll: false });
   }
 
-  const local = query ? searchDefaults(query) : [];
+  const local = query ? searchDefaults(blocked ? matched : query) : [];
+  const webPending = webStatus === "loading" || webStatus === "idle";
+  const nothing = status === "done" && results.length === 0 && !webPending && web.length === 0;
+
+  const kitchen = query && local.length > 0 && (
+    <Section title="From our kitchen" hint={`${local.length}`}>
+      <Grid recipes={local} onOpen={open} />
+    </Section>
+  );
 
   return (
     <main className="safe-bottom mx-auto min-h-dvh max-w-xl">
@@ -84,15 +126,28 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
       </div>
 
       <div className="px-4 pt-2">
+        {blocked && (
+          <p className="mb-4 rounded-2xl bg-clay-wash px-4 py-3 text-sm text-clay-deep">
+            {blocked} doesn&apos;t let apps read its recipes, so here are other versions of “{query}”. Or copy the
+            recipe from the site and{" "}
+            <Link href="/" className="font-medium underline underline-offset-4">
+              paste it on the home screen
+            </Link>
+            .
+          </p>
+        )}
+
         {importError && (
           <p role="alert" className="mb-4 rounded-2xl bg-clay-wash px-4 py-3 text-sm text-clay-deep">
             {importError}
-            {tryInBrowser && (
+            {suggestPaste && (
               <>
                 {" "}
-                <Link href="/import" className="font-medium underline underline-offset-4">
-                  Open it with the bookmark instead
+                Copy the recipe text and{" "}
+                <Link href="/" className="font-medium underline underline-offset-4">
+                  paste it on the home screen
                 </Link>
+                .
               </>
             )}
           </p>
@@ -104,15 +159,13 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
           </Section>
         )}
 
-        {query && local.length > 0 && (
-          <Section title="From our kitchen" hint={`${local.length}`}>
-            <Grid recipes={local} onOpen={open} />
-          </Section>
-        )}
+        {/* For a blocked link, the alternatives to that exact dish lead; our own recipes follow. */}
+        {!blocked && kitchen}
 
-        {query && (
+        {/* Our recipe database comes back with nothing for plenty of dishes; then the web section leads. */}
+        {query && !(status === "done" && results.length === 0 && !nothing) && (
           <Section
-            title={local.length ? "More recipes" : `Recipes for “${query}”`}
+            title={local.length && !blocked ? "More recipes" : `Recipes for “${blocked ? matched : query}”`}
             hint={status === "done" && results.length ? `${results.length}` : undefined}
           >
             {status === "loading" && <Skeleton />}
@@ -120,10 +173,10 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
               <Empty
                 title="Search is unavailable"
                 body="Check your connection and try again. Our own recipes still work offline."
-                action={<button onClick={() => run(query)} className="text-sm font-medium text-clay">Try again</button>}
+                action={<button onClick={() => run(query, !!blocked)} className="text-sm font-medium text-clay">Try again</button>}
               />
             )}
-            {status === "done" && results.length === 0 && (
+            {nothing && (
               <Empty
                 title="Nothing found"
                 body="Try a dish name (“lasagna”), an ingredient (“salmon”) or a cuisine (“Thai”). You can also paste a recipe link."
@@ -133,7 +186,15 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
           </Section>
         )}
 
-        {query && status === "done" && results.length === 0 && local.length === 0 && (
+        {blocked && kitchen}
+
+        {query && (webPending || web.length > 0) && (
+          <Section title="From around the web" hint={webStatus === "done" ? `${web.length}` : undefined}>
+            {webPending ? <Skeleton /> : <Grid recipes={web} onOpen={open} />}
+          </Section>
+        )}
+
+        {query && nothing && local.length === 0 && (
           <Section title="Or try one of ours">
             <Grid recipes={DEFAULT_RECIPES.slice(0, 4)} onOpen={open} />
           </Section>

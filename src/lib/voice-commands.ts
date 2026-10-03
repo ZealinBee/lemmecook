@@ -4,6 +4,7 @@ export type Command =
   | { type: "goto"; step: number }
   | { type: "ingredients" }
   | { type: "steps" }
+  | { type: "close" }
   | { type: "timer"; seconds: number; label?: string }
   | { type: "cancel-timer" }
   | { type: "time-left" }
@@ -86,6 +87,8 @@ export function parseCommand(transcript: string): Command | null {
     if (n) return { type: "goto", step: n };
   }
 
+  // "close ingredients", "hide the list", "never mind" → dismiss whatever sheet is open.
+  if (/\b(close|hide|dismiss|never ?mind|go away)\b/.test(t)) return { type: "close" };
   if (/\bread\b/.test(t) && /\bingredients?\b/.test(t)) return { type: "ingredients" };
   // "read aloud", "read it out", "read the instructions", "say it", "speak"… → read the current step.
   if (
@@ -103,18 +106,36 @@ export function parseCommand(transcript: string): Command | null {
 }
 
 const FRACTIONS: Record<string, number> = { "½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3 };
-// 1 · 1.5 · ½ · 1½ · 1 ½ · 1 1/2 · 1/2
-const NUM = String.raw`(?:\d+(?:\.\d+)?(?:\s*(?:[½¼¾⅓⅔]|\d\/\d))?|[½¼¾⅓⅔]|\d\/\d)`;
-const STEP_UNIT = String.raw`(hours?|hrs?|minutes?|mins?|seconds?|secs?)\b`;
+// 1 · 1.5 · 1,5 · ½ · 1½ · 1 ½ · 1 1/2 · 1/2
+const NUM = String.raw`(?:\d+(?:[.,]\d+)?(?:\s*(?:[½¼¾⅓⅔]|\d\/\d))?|[½¼¾⅓⅔]|\d\/\d)`;
+// Units in the languages recipes commonly come in. `(?!\p{L})` instead of `\b`, which only knows ASCII.
+const HOURS = String.raw`hours?|hrs?|h|час(?:а|ов)?|ч|годин(?:и|у)?|год|stunden?|std|heures?|horas?|ore|ora|uur|timm(?:e|ar)|tunti(?:a)?|godzin(?:y|ę|a)?|godz`;
+const MINUTES = String.raw`minutes?|mins?|минут(?:а|ы|у)?|мин|хвилин(?:и|у)?|хв|minuten?|minutos?|minuti|minuto|minuut|minut(?:er|y|ę|a)?|minuutti(?:a)?`;
+const SECONDS = String.raw`seconds?|secs?|секунд(?:а|ы|у)?|сек|sekunden?|secondes?|segundos?|secondi|seconden|sekund(?:er|y|ę|a)?|sekunti(?:a)?`;
+const STEP_UNIT = String.raw`(${HOURS}|${MINUTES}|${SECONDS})(?!\p{L})`;
+const AND = String.raw`(?:and|и|і|und|et|y|e|en|och|ja|i)`;
 const STEP_DURATION = new RegExp(
-  // "1 hour 30 minutes", "1 hr and 15 mins", "10-12 minutes", "1½ hours", "1 hour and a half"
-  String.raw`(${NUM})(?:\s*(?:-|–|to)\s*(${NUM}))?\s*${STEP_UNIT}` +
-    String.raw`(?:,?\s*(?:and\s+)?(?:(${NUM})\s*${STEP_UNIT}|(a half)\b))?`,
-  "gi",
+  // "1 hour 30 minutes", "1 hr and 15 mins", "10-12 minutes", "1½ hours", "1 hour and a half", "1,5 часа"
+  String.raw`(${NUM})(?:\s*(?:-|–|to|до)\s*(${NUM}))?\s*${STEP_UNIT}` +
+    String.raw`(?:,?\s*(?:${AND}\s+)?(?:(${NUM})\s*${STEP_UNIT}|(a half)(?!\p{L})))?`,
+  "giu",
 );
+// Russian/Ukrainian words with no digits: "полчаса", "полтора часа".
+const WORD_DURATIONS: [RegExp, number][] = [
+  [/полтора\s+час|півтори\s+годин/iu, 5400],
+  [/полчаса|пів\s*години/iu, 1800],
+];
+
+const IS_HOURS = new RegExp(`^(?:${HOURS})$`, "iu");
+const IS_MINUTES = new RegExp(`^(?:${MINUTES})$`, "iu");
+function stepUnitSeconds(unit: string): number {
+  if (IS_HOURS.test(unit)) return 3600;
+  if (IS_MINUTES.test(unit)) return 60;
+  return 1;
+}
 
 function parseNum(raw: string): number {
-  const s = raw.trim();
+  const s = raw.trim().replace(",", ".");
   const frac = s.match(/(\d)\/(\d)$/);
   const uni = s.match(/[½¼¾⅓⅔]$/);
   const whole = Number(s.match(/^\d+(?:\.\d+)?(?=\s|[½¼¾⅓⅔]|$)/)?.[0] ?? 0);
@@ -133,20 +154,18 @@ export function formatShortDuration(totalSeconds: number): string {
 
 /** Find durations mentioned in a recipe step, for one-tap timer chips. */
 export function findStepTimers(text: string): { label: string; seconds: number }[] {
-  const out: { label: string; seconds: number }[] = [];
+  const found: number[] = [];
   for (const m of text.matchAll(STEP_DURATION)) {
     const [, from, to, unit, extraNum, extraUnit, andAHalf] = m;
-    const base = unitSeconds(unit.toLowerCase());
+    const base = stepUnitSeconds(unit);
     // For ranges like "10-12 minutes", use the upper bound.
     let seconds = parseNum(to ?? from) * base;
-    if (extraNum && extraUnit) seconds += parseNum(extraNum) * unitSeconds(extraUnit.toLowerCase());
+    if (extraNum && extraUnit) seconds += parseNum(extraNum) * stepUnitSeconds(extraUnit);
     if (andAHalf) seconds += base / 2;
-    seconds = Math.round(seconds);
-    if (seconds > 0 && !out.some((o) => o.seconds === seconds)) {
-      out.push({ label: formatShortDuration(seconds), seconds });
-    }
+    found.push(Math.round(seconds));
   }
-  return out;
+  for (const [re, seconds] of WORD_DURATIONS) if (re.test(text)) found.push(seconds);
+  return [...new Set(found.filter((s) => s > 0))].map((seconds) => ({ label: formatShortDuration(seconds), seconds }));
 }
 
 export function formatClock(totalSeconds: number): string {

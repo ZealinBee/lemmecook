@@ -1,6 +1,13 @@
 import { SearchView } from "@/components/search-view";
 
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {
-  const { q } = await searchParams;
-  return <SearchView initialQuery={typeof q === "string" ? q : ""} />;
+  const { q, from } = await searchParams;
+  return (
+    <SearchView
+      // A blocked link can land here while we're already on /search; start that search fresh.
+      key={typeof from === "string" ? `${from}:${q}` : "search"}
+      initialQuery={typeof q === "string" ? q : ""}
+      blockedSite={typeof from === "string" ? from : undefined}
+    />
+  );
 }

@@ -1,3 +1,4 @@
+import "server-only";
 import type { Recipe, Step } from "./types";
 
 type Json = Record<string, unknown>;
@@ -191,7 +192,6 @@ function extractMicrodata(html: string): Json | undefined {
   };
 }
 
-/** Works on a full page from the server, or on the fragments the bookmarklet sends from the live page. */
 export function extractRecipe(html: string, sourceUrl: string): Omit<Recipe, "id" | "savedAt"> | null {
   const siteName = metaContent(html, "og:site_name");
   const image = metaContent(html, "og:image");

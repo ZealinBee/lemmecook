@@ -16,8 +16,8 @@ export function useOpenRecipe() {
   const router = useRouter();
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** The server couldn't read the page, but the user's own browser probably can (see /import). */
-  const [tryInBrowser, setTryInBrowser] = useState(false);
+  /** We couldn't read the page, but the user can still copy the recipe text from it. */
+  const [suggestPaste, setSuggestPaste] = useState(false);
 
   const open = useCallback(
     (recipe: Recipe) => {
@@ -33,7 +33,7 @@ export function useOpenRecipe() {
       const url = /^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`;
       setImporting(true);
       setError(null);
-      setTryInBrowser(false);
+      setSuggestPaste(false);
       try {
         const res = await fetch("/api/parse", {
           method: "POST",
@@ -43,10 +43,18 @@ export function useOpenRecipe() {
         const data = (await res.json()) as {
           recipe?: Omit<Recipe, "id" | "savedAt">;
           error?: string;
-          tryInBrowser?: boolean;
+          suggestPaste?: boolean;
+          /** Set when the site blocked us: the dish named in the link, to look up elsewhere. */
+          dish?: string;
         };
+        if (data.dish) {
+          const from = new URL(url).hostname.replace(/^www\./, "");
+          router.push(`/search?q=${encodeURIComponent(data.dish)}&from=${encodeURIComponent(from)}`);
+          setImporting(false);
+          return;
+        }
         if (!res.ok || !data.recipe) {
-          setTryInBrowser(!!data.tryInBrowser);
+          setSuggestPaste(!!data.suggestPaste);
           throw new Error(data.error ?? "Something went wrong.");
         }
         open({ ...data.recipe, id: crypto.randomUUID().slice(0, 8), savedAt: Date.now() });
@@ -55,8 +63,8 @@ export function useOpenRecipe() {
         setImporting(false);
       }
     },
-    [open],
+    [open, router],
   );
 
-  return { open, importLink, importing, error, setError, tryInBrowser };
+  return { open, importLink, importing, error, setError, suggestPaste };
 }

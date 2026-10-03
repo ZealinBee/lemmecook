@@ -46,7 +46,9 @@ export function useVoiceControl(onTranscript: (text: string) => void) {
     wantOn.current = true;
     setError(null);
     if (recRef.current) {
+      // If it's still winding down from stop(), start() throws; onend restarts it since wantOn is set.
       try { recRef.current.start(); } catch {}
+      setListening(true);
       return;
     }
     const rec = new Ctor();
@@ -70,11 +72,20 @@ export function useVoiceControl(onTranscript: (text: string) => void) {
       }
     };
     // Browsers end sessions after silence; restart while the user wants it on.
+    // Speech synthesis can grab the audio session, so a restart may throw — keep retrying.
+    const restart = (delay: number) =>
+      setTimeout(() => {
+        if (!wantOn.current) return;
+        try {
+          rec.start();
+        } catch (err) {
+          // InvalidStateError means it's already running (or ending, and onend will call us again).
+          if ((err as Error)?.name !== "InvalidStateError") restart(Math.min(delay * 2, 2000));
+        }
+      }, delay);
     rec.onend = () => {
       if (wantOn.current) {
-        setTimeout(() => {
-          if (wantOn.current) try { rec.start(); } catch {}
-        }, 250);
+        restart(250);
       } else {
         setListening(false);
       }
@@ -92,10 +103,15 @@ export function useVoiceControl(onTranscript: (text: string) => void) {
     setListening(false);
   }, []);
 
+  /** Drop the current session and start fresh; onend restarts it while the user wants it on. */
+  const reset = useCallback(() => {
+    if (wantOn.current) recRef.current?.abort();
+  }, []);
+
   useEffect(() => () => {
     wantOn.current = false;
     recRef.current?.abort();
   }, []);
 
-  return { supported, listening, lastHeard, error, start, stop };
+  return { supported, listening, lastHeard, error, start, stop, reset };
 }

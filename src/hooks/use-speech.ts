@@ -8,41 +8,46 @@ function synth(): SpeechSynthesis | undefined {
   return typeof window !== "undefined" ? window.speechSynthesis : undefined;
 }
 
-/** Prefer the nicer voices browsers ship (Google, Apple "Enhanced", Edge "Natural") in the page's language. */
-function pickVoice(): SpeechSynthesisVoice | undefined {
+/** Prefer the nicer voices browsers ship (Google, Apple "Enhanced", Edge "Natural") in the given language. */
+function pickVoice(want?: string): SpeechSynthesisVoice | undefined {
   const voices = synth()?.getVoices() ?? [];
-  const lang = (typeof navigator !== "undefined" ? navigator.language : "en-US").toLowerCase();
-  const base = lang.split("-")[0];
-  const inLang = voices.filter((v) => v.lang.toLowerCase().startsWith(base));
+  const nav = (typeof navigator !== "undefined" ? navigator.language : "en-US").toLowerCase();
+  const base = (want ?? nav).toLowerCase().split("-")[0];
+  // The user's own regional variant if it matches (en-GB for a British user), else any.
+  const lang = nav.startsWith(base) ? nav : base;
+  const inLang = voices.filter((v) => v.lang.toLowerCase().replace("_", "-").startsWith(base));
+  if (!inLang.length && want) return undefined; // let the browser fall back via utterance.lang
   const pool = inLang.length ? inLang : voices;
   const score = (v: SpeechSynthesisVoice) =>
-    (v.lang.toLowerCase() === lang ? 4 : 0) +
+    (v.lang.toLowerCase().replace("_", "-") === lang ? 4 : 0) +
     (/natural|neural|enhanced|premium/i.test(v.name) ? 3 : 0) +
     (/google|samantha|daniel|karen|moira/i.test(v.name) ? 2 : 0) +
     (v.default ? 1 : 0);
   return [...pool].sort((a, b) => score(b) - score(a))[0];
 }
 
-/** Chrome silently cuts utterances off after ~15s, so speak a sentence at a time. */
+/** Chrome silently cuts utterances off after ~15s, so speak a sentence at a time. Keeps "1.5" together. */
 function chunks(text: string): string[] {
-  return (text.match(/[^.!?;]+[.!?;]*/g) ?? [text]).map((s) => s.trim()).filter(Boolean);
+  return text.split(/(?<=[.!?;。！？])\s+/).map((s) => s.trim()).filter(Boolean);
 }
 
-const words = (s: string) => s.toLowerCase().match(/[a-z0-9']+/g) ?? [];
+const words = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
 
 /** Free, on-device text to speech via the browser's Web Speech API. Speaks only when `speak` is called. */
 export function useSpeech() {
   const supported = useSyncExternalStore(noopSubscribe, () => Boolean(synth()), () => false);
   const [speaking, setSpeaking] = useState(false);
-  const voice = useRef<SpeechSynthesisVoice | undefined>(undefined);
+  // Best voice per language, rebuilt when the browser's voice list loads.
+  const voices = useRef(new Map<string, SpeechSynthesisVoice | undefined>());
   // What we last said and when we stopped, so the mic can ignore our own voice.
   const spoken = useRef({ text: "", until: 0 });
+  // Chrome garbage-collects unreferenced utterances and then never fires their onend.
+  const queue = useRef<SpeechSynthesisUtterance[]>([]);
 
   useEffect(() => {
     const s = synth();
     if (!s) return;
-    const load = () => (voice.current = pickVoice());
-    load();
+    const load = () => voices.current.clear();
     s.addEventListener("voiceschanged", load);
     return () => {
       s.removeEventListener("voiceschanged", load);
@@ -56,18 +61,24 @@ export function useSpeech() {
     spoken.current.until = Date.now() + 800;
   }, []);
 
-  const speak = useCallback((text: string) => {
+  /** `lang` is the text's language ("ru", "de"…); omit to use the browser's. */
+  const speak = useCallback((text: string, lang?: string) => {
     const s = synth();
     if (!s || !text.trim()) return;
     s.cancel();
-    voice.current ??= pickVoice();
+    const key = lang ?? "";
+    if (!voices.current.has(key)) voices.current.set(key, pickVoice(lang));
+    const voice = voices.current.get(key);
     spoken.current = { text, until: Number.POSITIVE_INFINITY };
     const parts = chunks(text);
+    queue.current = [];
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
-      if (voice.current) {
-        u.voice = voice.current;
-        u.lang = voice.current.lang;
+      if (voice) {
+        u.voice = voice;
+        u.lang = voice.lang;
+      } else if (lang) {
+        u.lang = lang;
       }
       u.rate = 0.95;
       if (i === 0) u.onstart = () => setSpeaking(true);
@@ -75,14 +86,22 @@ export function useSpeech() {
         u.onend = u.onerror = () => {
           setSpeaking(false);
           spoken.current.until = Date.now() + 1200;
+          queue.current = [];
         };
       }
+      queue.current.push(u);
       s.speak(u);
     });
   }, []);
 
   /** True when the mic most likely picked up our own speech rather than the cook. */
   const isEcho = useCallback((heard: string) => {
+    // Don't trust onend alone: if it never fired, the mic would ignore the cook forever.
+    const s = synth();
+    if (spoken.current.until === Number.POSITIVE_INFINITY && !s?.speaking && !s?.pending) {
+      spoken.current.until = Date.now() + 1200;
+      setSpeaking(false);
+    }
     const { text, until } = spoken.current;
     if (Date.now() > until) return false;
     const said = new Set(words(text));
