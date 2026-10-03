@@ -192,8 +192,8 @@ function Cook({ recipe }: { recipe: Recipe }) {
 
   const voice = useVoiceControl(handleTranscript);
 
-  // While we read aloud the mic hears the speaker and Chrome holds that utterance open long after
-  // we stop, swallowing whatever the cook says next. Start a fresh session once reading ends.
+  // While we read aloud the mic hears the speaker; drop that half-heard phrase once reading ends
+  // so it doesn't swallow whatever the cook says next.
   const { reset: resetVoice } = voice;
   const wasSpeaking = useRef(false);
   useEffect(() => {
@@ -228,6 +228,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
   const controls = (
     <ControlBar
       listening={voice.listening}
+      loading={voice.loading}
       supported={voice.supported}
       lastHeard={voice.lastHeard}
       error={voice.error}
@@ -643,6 +644,7 @@ function IngredientList({
 
 function ControlBar({
   listening,
+  loading,
   supported,
   lastHeard,
   error,
@@ -651,6 +653,7 @@ function ControlBar({
   onIngredients,
 }: {
   listening: boolean;
+  loading: boolean;
   supported: boolean;
   lastHeard: string;
   error: string | null;
@@ -660,7 +663,9 @@ function ControlBar({
 }) {
   const status = error
     ? error
-    : listening
+    : loading
+      ? "Loading voice model…"
+      : listening
       ? lastHeard
         ? `Heard “${lastHeard}”`
         : "Listening — say “next”"

@@ -61,8 +61,48 @@ export function parseDuration(text: string): number | undefined {
   return total > 0 ? Math.round(total) : undefined;
 }
 
+/**
+ * Every word the commands below listen for. The on-device recognizer is restricted to these, so
+ * ordinary conversation comes back as "[unk]" instead of being forced into a command.
+ * Keep in sync when adding commands.
+ */
+export const COMMAND_WORDS = [
+  // navigation
+  "next", "continue", "done", "forward", "okay", "got", "it", "back", "previous", "go", "last", "one",
+  "before", "step", "steps", "jump", "skip", "to", "the", "what's", "what", "is", "instructions",
+  "start", "cooking", "let's", "cook", "begin",
+  // ingredients, sheets
+  "ingredients", "ingredient", "do", "i", "need", "shopping", "close", "hide", "dismiss", "never", "mind",
+  "away", "list", "help", "can", "say", "commands",
+  // reading
+  "read", "repeat", "again", "was", "that", "this", "pardon", "come", "speak", "tell", "me", "out", "loud",
+  "aloud", "stop", "quiet", "hush", "shush", "silence", "be", "talking",
+  // timers
+  "set", "timer", "remind", "for", "a", "an", "and", "half", "quarter", "of", "hour", "hours", "minute",
+  "minutes", "second", "seconds", "cancel", "clear", "how", "much", "long", "time", "left", "remaining",
+  "my", "pasta", "rice", "oven", "eggs",
+  // numbers
+  "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+  "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty",
+  "fifty", "sixty", "seventy", "eighty", "ninety",
+  "first", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+];
+
+const TENS: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const ONES: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+
+/** "thirty five" → "35", "seventy" → "70", so "thirty five minutes" isn't read as five. */
+function joinNumberWords(t: string): string {
+  return t
+    .replace(
+      new RegExp(`\\b(${Object.keys(TENS).join("|")})[\\s-]+(${Object.keys(ONES).join("|")})\\b`, "g"),
+      (_, tens: string, ones: string) => String(TENS[tens] + ONES[ones]),
+    )
+    .replace(/\b(seventy|eighty)\b/g, (w) => String(TENS[w]));
+}
+
 export function parseCommand(transcript: string): Command | null {
-  const t = transcript.toLowerCase().trim();
+  const t = joinNumberWords(transcript.toLowerCase().trim());
   if (!t) return null;
 
   if (/\b(cancel|stop|clear|kill)\b.*\btimer\b/.test(t)) return { type: "cancel-timer" };
