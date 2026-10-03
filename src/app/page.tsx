@@ -3,16 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRightIcon, ListIcon, MicIcon, SparkIcon, SunIcon, TimerIcon } from "@/components/icons";
-import { RecipeCard, RecipeRow } from "@/components/recipe-card";
+import { AppIcon, ArrowRightIcon, ListIcon, MicIcon, SunIcon, TimerIcon } from "@/components/icons";
+import { RecipeRow } from "@/components/recipe-card";
 import { SearchBar } from "@/components/search-bar";
 import { looksLikeUrl, useOpenRecipe } from "@/hooks/use-open-recipe";
 import { useRecipes } from "@/hooks/use-recipes";
-import { CATEGORIES, DEFAULT_RECIPES } from "@/lib/default-recipes";
+import { CATEGORIES } from "@/lib/default-recipes";
 import { looksLikeRoundup, parseRecipeText } from "@/lib/parse-text";
 import { removeRecipe } from "@/lib/storage";
-
-const QUICK = DEFAULT_RECIPES.filter((r) => (r.totalMinutes ?? 99) <= 20);
 
 /** A paste that's clearly a whole recipe rather than a search or link. */
 function looksLikeRecipeText(text: string) {
@@ -56,7 +54,7 @@ export default function Home() {
   return (
     <main className="safe-top safe-bottom mx-auto flex min-h-dvh max-w-xl flex-col">
       <header className="flex items-center gap-2 px-5 py-3">
-        <SparkIcon className="text-clay" width={20} height={20} />
+        <AppIcon width={26} height={26} />
         <span className="font-serif text-[1.35rem] tracking-tight">Lemme Cook</span>
       </header>
 
@@ -176,26 +174,6 @@ export default function Home() {
           </ul>
         </section>
       )}
-
-      <section className="rise mt-10" style={{ animationDelay: "120ms" }}>
-        <div className="px-5">
-          <SectionTitle hint="Works offline">From our kitchen</SectionTitle>
-        </div>
-        <div className="flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none]">
-          {DEFAULT_RECIPES.map((r) => (
-            <RecipeCard key={r.id} recipe={r} onOpen={open} className="w-[42%] shrink-0 snap-start" />
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-10 px-5">
-        <SectionTitle>Dinner in 20 minutes</SectionTitle>
-        <div className="grid grid-cols-2 gap-3">
-          {QUICK.slice(0, 4).map((r) => (
-            <RecipeCard key={r.id} recipe={r} onOpen={open} />
-          ))}
-        </div>
-      </section>
 
       <ul className="mt-12 grid grid-cols-3 gap-2 px-5">
         {[

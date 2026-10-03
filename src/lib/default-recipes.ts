@@ -337,16 +337,6 @@ export const CATEGORIES = [
   { label: "Soup", query: "soup" },
 ];
 
-/** Simple local match over title, tags and ingredients. */
-export function searchDefaults(query: string): Recipe[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  return DEFAULT_RECIPES.filter((r) => {
-    const hay = [r.title, ...(r.tags ?? []), ...r.ingredients].join(" ").toLowerCase();
-    return words.every((w) => hay.includes(w.replace(/s$/, "")));
-  });
-}
-
 /** A few house recipes to suggest, skipping the one you're on. */
 export function suggestDefaults(excludeId?: string, count = 3): Recipe[] {
   return DEFAULT_RECIPES.filter((r) => r.id !== excludeId).slice(0, count);

@@ -118,3 +118,22 @@ export const RepeatIcon = (p: P) => (
     <path d="M4 4v4.5h4.5" />
   </svg>
 );
+
+/** The app icon (same artwork as src/app/icon.svg), for the header. */
+export const AppIcon = (p: P) => (
+  <svg width={26} height={26} viewBox="0 0 64 64" aria-hidden {...p}>
+    <rect width="64" height="64" rx="14" fill="#D97757" />
+    <g fill="none" stroke="#FAF9F5" strokeWidth="3.5" strokeLinecap="round">
+      <path d="M24 22c-3-3 3-6 0-10" />
+      <path d="M32 22c-3-3 3-6 0-10" />
+      <path d="M40 22c-3-3 3-6 0-10" />
+    </g>
+    <g fill="#FAF9F5">
+      <rect x="7" y="36" width="9" height="4.5" rx="2.25" />
+      <rect x="48" y="36" width="9" height="4.5" rx="2.25" />
+      <path d="M15 33h34v9a10 10 0 0 1-10 10H25a10 10 0 0 1-10-10z" />
+      <rect x="11" y="27" width="42" height="5" rx="2.5" />
+    </g>
+    <rect x="15" y="38" width="34" height="3" fill="#C6613F" />
+  </svg>
+);

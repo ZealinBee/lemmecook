@@ -7,7 +7,7 @@ import { ArrowLeftIcon, SearchIcon } from "@/components/icons";
 import { RecipeCard } from "@/components/recipe-card";
 import { SearchBar } from "@/components/search-bar";
 import { looksLikeUrl, useOpenRecipe } from "@/hooks/use-open-recipe";
-import { CATEGORIES, DEFAULT_RECIPES, searchDefaults } from "@/lib/default-recipes";
+import { CATEGORIES, DEFAULT_RECIPES } from "@/lib/default-recipes";
 import type { Recipe } from "@/lib/types";
 
 type Status = "idle" | "loading" | "done" | "error";
@@ -83,15 +83,10 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
     router.replace(`/search?q=${encodeURIComponent(value)}`, { scroll: false });
   }
 
-  const local = query ? searchDefaults(blocked ? matched : query) : [];
   const webPending = webStatus === "loading" || webStatus === "idle";
   const nothing = status === "done" && results.length === 0 && !webPending && web.length === 0;
-
-  const kitchen = query && local.length > 0 && (
-    <Section title="From our kitchen" hint={`${local.length}`}>
-      <Grid recipes={local} onOpen={open} />
-    </Section>
-  );
+  const searching = status === "loading" || (webPending && status !== "error");
+  const found = [...(status === "done" ? results : []), ...(webPending ? [] : web)];
 
   return (
     <main className="safe-bottom mx-auto min-h-dvh max-w-xl">
@@ -159,17 +154,12 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
           </Section>
         )}
 
-        {/* For a blocked link, the alternatives to that exact dish lead; our own recipes follow. */}
-        {!blocked && kitchen}
-
-        {/* Our recipe database comes back with nothing for plenty of dishes; then the web section leads. */}
-        {query && !(status === "done" && results.length === 0 && !nothing) && (
-          <Section
-            title={local.length && !blocked ? "More recipes" : `Recipes for “${blocked ? matched : query}”`}
-            hint={status === "done" && results.length ? `${results.length}` : undefined}
-          >
-            {status === "loading" && <Skeleton />}
-            {status === "error" && (
+        {/* One list: our recipe database's matches first, then the web's. */}
+        {query && (
+          <Section title="From around the web" hint={found.length && !searching ? `${found.length}` : undefined}>
+            {found.length > 0 && <Grid recipes={found} onOpen={open} />}
+            {searching && <div className={found.length ? "mt-5" : ""}><Skeleton /></div>}
+            {status === "error" && !searching && !found.length && (
               <Empty
                 title="Search is unavailable"
                 body="Check your connection and try again. Our own recipes still work offline."
@@ -182,19 +172,10 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
                 body="Try a dish name (“lasagna”), an ingredient (“salmon”) or a cuisine (“Thai”). You can also paste a recipe link."
               />
             )}
-            {status === "done" && results.length > 0 && <Grid recipes={results} onOpen={open} />}
           </Section>
         )}
 
-        {blocked && kitchen}
-
-        {query && (webPending || web.length > 0) && (
-          <Section title="From around the web" hint={webStatus === "done" ? `${web.length}` : undefined}>
-            {webPending ? <Skeleton /> : <Grid recipes={web} onOpen={open} />}
-          </Section>
-        )}
-
-        {query && nothing && local.length === 0 && (
+        {query && nothing && (
           <Section title="Or try one of ours">
             <Grid recipes={DEFAULT_RECIPES.slice(0, 4)} onOpen={open} />
           </Section>
