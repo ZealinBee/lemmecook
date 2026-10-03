@@ -14,7 +14,7 @@ type Status = "idle" | "loading" | "done" | "error";
 
 export function SearchView({ initialQuery }: { initialQuery: string }) {
   const router = useRouter();
-  const { open, importLink, importing, error: importError } = useOpenRecipe();
+  const { open, importLink, importing, error: importError, tryInBrowser } = useOpenRecipe();
   const [input, setInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<Recipe[]>([]);
@@ -87,6 +87,14 @@ export function SearchView({ initialQuery }: { initialQuery: string }) {
         {importError && (
           <p role="alert" className="mb-4 rounded-2xl bg-clay-wash px-4 py-3 text-sm text-clay-deep">
             {importError}
+            {tryInBrowser && (
+              <>
+                {" "}
+                <Link href="/import" className="font-medium underline underline-offset-4">
+                  Open it with the bookmark instead
+                </Link>
+              </>
+            )}
           </p>
         )}
 

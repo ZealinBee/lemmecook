@@ -1,4 +1,3 @@
-import "server-only";
 import type { Recipe, Step } from "./types";
 
 type Json = Record<string, unknown>;
@@ -101,21 +100,17 @@ function metaContent(html: string, prop: string): string | undefined {
   return html.match(re)?.[1];
 }
 
-export function extractRecipe(html: string, sourceUrl: string): Omit<Recipe, "id" | "savedAt"> | null {
-  const blocks = html.matchAll(
-    /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
-  );
-  let recipe: Json | undefined;
-  for (const [, body] of blocks) {
-    try {
-      recipe = findRecipe(JSON.parse(body.trim()));
-    } catch {
-      continue;
-    }
-    if (recipe) break;
+/** Some sites ship JSON-LD with raw newlines or tabs inside strings, which JSON.parse rejects. */
+function parseJsonLoose(body: string): unknown {
+  const text = body.trim().replace(/^<!--|-->$/g, "");
+  try {
+    return JSON.parse(text);
+  } catch {
+    return JSON.parse(text.replace(/[\u0000-\u001f]+/g, " "));
   }
-  if (!recipe) return null;
+}
 
+function fromSchema(recipe: Json, sourceUrl: string, siteName?: string, image?: string): Omit<Recipe, "id" | "savedAt"> | null {
   const ingredients = (
     (recipe.recipeIngredient ?? recipe.ingredients ?? []) as unknown[]
   )
@@ -130,10 +125,10 @@ export function extractRecipe(html: string, sourceUrl: string): Omit<Recipe, "id
   return {
     origin: "link",
     sourceUrl,
-    siteName: clean(metaContent(html, "og:site_name")) || new URL(sourceUrl).hostname.replace(/^www\./, ""),
+    siteName: clean(siteName) || new URL(sourceUrl).hostname.replace(/^www\./, ""),
     title: clean(recipe.name) || "Untitled recipe",
     description: clean(recipe.description) || undefined,
-    image: pickImage(recipe.image) ?? metaContent(html, "og:image"),
+    image: pickImage(recipe.image) ?? image,
     author: pickAuthor(recipe.author),
     yield: pickYield(recipe.recipeYield),
     prepMinutes: prep,
@@ -142,4 +137,76 @@ export function extractRecipe(html: string, sourceUrl: string): Omit<Recipe, "id
     ingredients,
     steps,
   };
+}
+
+/** Older sites mark recipes up with schema.org microdata (itemprop="…") instead of JSON-LD. */
+function extractMicrodata(html: string): Json | undefined {
+  if (!/itemtype=["']https?:\/\/schema\.org\/Recipe["']/i.test(html)) return undefined;
+  /** Raw values in document order: a tag's content="…" attribute, or else its inner HTML. */
+  const props = (name: string) => {
+    const out: string[] = [];
+    const tag = new RegExp(`<(\\w+)\\b[^>]*\\bitemprop=["'](?:[^"']*\\s)?${name}(?:\\s[^"']*)?["'][^>]*>`, "gi");
+    for (const m of html.matchAll(tag)) {
+      const content = m[0].match(/\bcontent=["']([^"']*)["']/i)?.[1];
+      if (content != null) {
+        out.push(content);
+        continue;
+      }
+      if (/^(meta|link|img|br)$/i.test(m[1])) continue;
+      // Inner HTML up to the matching close tag, counting nested tags of the same name.
+      const open = new RegExp(`<${m[1]}\\b|</${m[1]}>`, "gi");
+      open.lastIndex = m.index + m[0].length;
+      let depth = 1;
+      let end = html.length;
+      for (let t = open.exec(html); t; t = open.exec(html)) {
+        depth += t[0][1] === "/" ? -1 : 1;
+        if (depth === 0) {
+          end = t.index;
+          break;
+        }
+      }
+      out.push(html.slice(m.index + m[0].length, end));
+    }
+    return out;
+  };
+  const one = (name: string) => clean(props(name)[0]) || undefined;
+
+  const ingredients = props("(?:recipeIngredient|ingredients)").map(clean).filter(Boolean);
+  // Either one element per step, or one block holding every step as <li>/<p>/<br>-separated lines.
+  const steps = props("recipeInstructions")
+    .flatMap((raw) => raw.split(/<\/(?:li|p|div)>|<br\s*\/?>/i))
+    .map(clean)
+    .filter(Boolean);
+  if (!ingredients.length && !steps.length) return undefined;
+  return {
+    name: one("name"),
+    description: one("description"),
+    image: one("image"),
+    recipeYield: one("recipeYield"),
+    prepTime: one("prepTime"),
+    cookTime: one("cookTime"),
+    totalTime: one("totalTime"),
+    recipeIngredient: ingredients,
+    recipeInstructions: steps,
+  };
+}
+
+/** Works on a full page from the server, or on the fragments the bookmarklet sends from the live page. */
+export function extractRecipe(html: string, sourceUrl: string): Omit<Recipe, "id" | "savedAt"> | null {
+  const siteName = metaContent(html, "og:site_name");
+  const image = metaContent(html, "og:image");
+  for (const [, body] of html.matchAll(
+    /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
+  )) {
+    let recipe: Json | undefined;
+    try {
+      recipe = findRecipe(parseJsonLoose(body));
+    } catch {
+      continue;
+    }
+    const parsed = recipe && fromSchema(recipe, sourceUrl, siteName, image);
+    if (parsed) return parsed;
+  }
+  const micro = extractMicrodata(html);
+  return micro ? fromSchema(micro, sourceUrl, siteName, image) : null;
 }

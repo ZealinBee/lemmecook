@@ -23,7 +23,7 @@ function looksLikeRecipeText(text: string) {
 export default function Home() {
   const router = useRouter();
   const { recipes } = useRecipes();
-  const { open, importLink, importing, error, setError } = useOpenRecipe();
+  const { open, importLink, importing, error, setError, tryInBrowser } = useOpenRecipe();
   const [query, setQuery] = useState("");
   const [textMode, setTextMode] = useState(false);
   const [text, setText] = useState("");
@@ -115,9 +115,27 @@ export default function Home() {
           </>
         )}
         {error && (
-          <p role="alert" className="mt-3 rounded-2xl bg-clay-wash px-4 py-3 text-sm text-clay-deep">
-            {error}
-          </p>
+          <div role="alert" className="mt-3 rounded-2xl bg-clay-wash px-4 py-3 text-sm text-clay-deep">
+            <p>{error}</p>
+            {tryInBrowser && !textMode && (
+              <p className="mt-2">
+                <Link href="/import" className="font-medium underline underline-offset-4">
+                  Open it with the bookmark
+                </Link>{" "}
+                or{" "}
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setTextMode(true);
+                  }}
+                  className="font-medium underline underline-offset-4"
+                >
+                  paste the recipe text
+                </button>
+                .
+              </p>
+            )}
+          </div>
         )}
         <nav className="-mx-5 mt-4 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
           {CATEGORIES.map((c) => (
@@ -191,6 +209,10 @@ export default function Home() {
 
       <footer className="mt-auto px-5 pt-10 text-center text-xs text-muted">
         Search powered by TheMealDB. Allow the microphone for voice control.
+        <br />
+        <Link href="/import" className="mt-2 inline-block underline decoration-line underline-offset-4">
+          A recipe site won&apos;t load? Get the bookmark
+        </Link>
       </footer>
     </main>
   );

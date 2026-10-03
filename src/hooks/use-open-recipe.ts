@@ -16,6 +16,8 @@ export function useOpenRecipe() {
   const router = useRouter();
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The server couldn't read the page, but the user's own browser probably can (see /import). */
+  const [tryInBrowser, setTryInBrowser] = useState(false);
 
   const open = useCallback(
     (recipe: Recipe) => {
@@ -31,14 +33,22 @@ export function useOpenRecipe() {
       const url = /^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`;
       setImporting(true);
       setError(null);
+      setTryInBrowser(false);
       try {
         const res = await fetch("/api/parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url }),
         });
-        const data = (await res.json()) as { recipe?: Omit<Recipe, "id" | "savedAt">; error?: string };
-        if (!res.ok || !data.recipe) throw new Error(data.error ?? "Something went wrong.");
+        const data = (await res.json()) as {
+          recipe?: Omit<Recipe, "id" | "savedAt">;
+          error?: string;
+          tryInBrowser?: boolean;
+        };
+        if (!res.ok || !data.recipe) {
+          setTryInBrowser(!!data.tryInBrowser);
+          throw new Error(data.error ?? "Something went wrong.");
+        }
         open({ ...data.recipe, id: crypto.randomUUID().slice(0, 8), savedAt: Date.now() });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -48,5 +58,5 @@ export function useOpenRecipe() {
     [open],
   );
 
-  return { open, importLink, importing, error, setError };
+  return { open, importLink, importing, error, setError, tryInBrowser };
 }
