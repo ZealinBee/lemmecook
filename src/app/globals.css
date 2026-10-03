@@ -1,26 +1,119 @@
 @import "tailwindcss";
 
+/*
+ * Palette after claude.com: warm ivory paper, near-black slate ink,
+ * clay accent, oat/kraft neutrals. Serif display + clean sans body.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --ivory: #faf9f5;
+  --paper: #f5f3ec;
+  --oat: #e8e4d8;
+  --line: #e3dfd2;
+  --ink: #141413;
+  --ink-soft: #3d3d3a;
+  --muted: #73726c;
+  --clay: #d97757;
+  --clay-deep: #c6613f;
+  --clay-wash: #f6e3da;
+  --kraft: #d4a27f;
+  --sage: #788c5d;
+  --card: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --ivory: #1f1e1d;
+    --paper: #262624;
+    --oat: #30302e;
+    --line: #3a3936;
+    --ink: #f5f4ee;
+    --ink-soft: #d6d4cc;
+    --muted: #9c9a92;
+    --clay: #e08a6c;
+    --clay-deep: #d97757;
+    --clay-wash: #3b2a23;
+    --kraft: #c8a07f;
+    --sage: #9cb07f;
+    --card: #2a2927;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-ivory: var(--ivory);
+  --color-paper: var(--paper);
+  --color-oat: var(--oat);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-clay: var(--clay);
+  --color-clay-deep: var(--clay-deep);
+  --color-clay-wash: var(--clay-wash);
+  --color-kraft: var(--kraft);
+  --color-sage: var(--sage);
+  --color-card: var(--card);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-serif-display);
 }
+
+html,
+body {
+  background: var(--ivory);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+::selection {
+  background: var(--clay-wash);
+}
+
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 0.75rem);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.pulse-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--clay);
+  animation: pulse-ring 1.6s ease-out infinite;
+  z-index: -1;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes bar {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+.eq span {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: bar 0.9s ease-in-out infinite;
+}
+.eq span:nth-child(2) { animation-delay: 0.15s; }
+.eq span:nth-child(3) { animation-delay: 0.3s; }
+.eq span:nth-child(4) { animation-delay: 0.45s; }
