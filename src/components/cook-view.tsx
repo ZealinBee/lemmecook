@@ -25,6 +25,7 @@ import { useRecipes } from "@/hooks/use-recipes";
 import { useSpeech } from "@/hooks/use-speech";
 import { detectLanguage, stepPrefix } from "@/lib/language";
 import { getDefaultRecipe, suggestDefaults } from "@/lib/default-recipes";
+import { formatScale, scaleIngredient, SCALES } from "@/lib/scale";
 import { useTimers, type Timer } from "@/hooks/use-timers";
 import { useVoiceControl } from "@/hooks/use-voice-control";
 import { useWakeLock } from "@/hooks/use-wake-lock";
@@ -85,6 +86,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
   const [step, setStep] = useState(0);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [checked, setChecked] = useState<Set<number>>(() => new Set());
+  const [scale, setScale] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
 
   const screenOn = useWakeLock(true);
@@ -246,6 +248,8 @@ function Cook({ recipe }: { recipe: Recipe }) {
           screenOn={screenOn}
           checked={checked}
           onToggle={toggleChecked}
+          scale={scale}
+          onScale={setScale}
           onStart={startCooking}
         />
       )}
@@ -291,7 +295,8 @@ function Cook({ recipe }: { recipe: Recipe }) {
       )}
 
       <BottomSheet open={sheet === "ingredients"} onClose={() => setSheet(null)} title="Ingredients">
-        <IngredientList items={recipe.ingredients} checked={checked} onToggle={toggleChecked} />
+        <ScalePicker scale={scale} onScale={setScale} className="mb-3" />
+        <IngredientList items={recipe.ingredients} scale={scale} checked={checked} onToggle={toggleChecked} />
       </BottomSheet>
 
       <BottomSheet open={sheet === "help"} onClose={() => setSheet(null)} title="Say things like…">
@@ -333,19 +338,23 @@ function Overview({
   screenOn,
   checked,
   onToggle,
+  scale,
+  onScale,
   onStart,
 }: {
   recipe: Recipe;
   screenOn: boolean;
   checked: Set<number>;
   onToggle: (i: number) => void;
+  scale: number;
+  onScale: (f: number) => void;
   onStart: (at?: number) => void;
 }) {
   const meta = [
     { label: "Prep", value: formatMinutes(recipe.prepMinutes), icon: ClockIcon },
     { label: "Cook", value: formatMinutes(recipe.cookMinutes), icon: ClockIcon },
     { label: "Total", value: formatMinutes(recipe.totalMinutes), icon: ClockIcon },
-    { label: "Serves", value: recipe.yield, icon: UsersIcon },
+    { label: "Serves", value: recipe.yield && scaleIngredient(recipe.yield, scale), icon: UsersIcon },
   ].filter((m) => m.value);
 
   return (
@@ -404,7 +413,8 @@ function Overview({
               {checked.size} of {recipe.ingredients.length} ready
             </span>
           </div>
-          <IngredientList items={recipe.ingredients} checked={checked} onToggle={onToggle} />
+          <ScalePicker scale={scale} onScale={onScale} className="mb-3" />
+          <IngredientList items={recipe.ingredients} scale={scale} checked={checked} onToggle={onToggle} />
         </section>
 
         <section className="mt-10">
@@ -604,12 +614,69 @@ function DoneView({ recipe, onBack, onRestart }: { recipe: Recipe; onBack: () =>
 
 /* ------------------------------- Components ------------------------------- */
 
+function ScalePicker({ scale, onScale, className = "" }: { scale: number; onScale: (f: number) => void; className?: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const custom = !SCALES.includes(scale);
+  const pill = (on: boolean) =>
+    `h-9 flex-1 rounded-full text-sm tabular-nums transition ${
+      on ? "bg-card font-medium text-ink shadow-sm" : "text-muted active:bg-oat"
+    }`;
+
+  return (
+    <div role="radiogroup" aria-label="Scale recipe" className={`flex gap-1 rounded-full bg-paper p-1 ${className}`}>
+      {SCALES.map((f) => (
+        <button key={f} role="radio" aria-checked={f === scale} onClick={() => onScale(f)} className={pill(f === scale)}>
+          {formatScale(f)}
+        </button>
+      ))}
+      {editing ? (
+        <label className={`${pill(true)} flex items-center justify-center gap-0.5 px-2`}>
+          <input
+            autoFocus
+            type="number"
+            inputMode="decimal"
+            min={0.1}
+            max={20}
+            step={0.25}
+            aria-label="Custom scale"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              const f = parseFloat(e.target.value.replace(",", "."));
+              if (f > 0 && f <= 20) onScale(f);
+            }}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            className="w-10 bg-transparent text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          ×
+        </label>
+      ) : (
+        <button
+          role="radio"
+          aria-checked={custom}
+          onClick={() => {
+            setDraft(custom ? String(scale) : "");
+            setEditing(true);
+          }}
+          className={pill(custom)}
+        >
+          {custom ? `${Math.round(scale * 100) / 100}×` : "Custom"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function IngredientList({
   items,
+  scale,
   checked,
   onToggle,
 }: {
   items: string[];
+  scale: number;
   checked: Set<number>;
   onToggle: (i: number) => void;
 }) {
@@ -632,7 +699,7 @@ function IngredientList({
                 {on && <CheckIcon width={14} height={14} strokeWidth={2.6} />}
               </span>
               <span className={`text-[1rem] leading-snug transition ${on ? "text-muted line-through decoration-muted/50" : "text-ink"}`}>
-                {item}
+                {scaleIngredient(item, scale)}
               </span>
             </button>
           </li>
