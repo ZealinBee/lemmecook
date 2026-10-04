@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Newsreader } from "next/font/google";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -10,9 +11,33 @@ const serif = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Lemme Cook",
-  description: "Drop in a recipe link. Cook hands-free with voice.",
-  appleWebApp: { capable: true, title: "Lemme Cook", statusBarStyle: "default" },
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: `%s · ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "voice cooking",
+    "hands-free cooking",
+    "voice guided cooking",
+    "voice controlled recipes",
+    "cooking assistant",
+    "recipe reader",
+    "read recipe aloud",
+    "voice kitchen timer",
+    "cook mode",
+    "step by step recipes",
+  ],
+  category: "food",
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: "/",
+    locale: "en_US",
+  },
+  twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
+  appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
