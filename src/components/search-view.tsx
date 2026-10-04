@@ -27,6 +27,8 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
   const [web, setWeb] = useState<Recipe[]>([]);
   const [webStatus, setWebStatus] = useState<Status>("idle");
   const latestWeb = useRef(0);
+  /** The server's guess when the query as typed found nothing ("mapotofu" → "mapo tofu"). */
+  const [corrected, setCorrected] = useState<string>();
 
   const run = useCallback(async (q: string, loose: boolean) => {
     const id = ++latest.current;
@@ -38,6 +40,7 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
       if (!res.ok) throw new Error(data.error);
       setMatched(data.query ?? q);
       if (loose && data.query) setInput(data.query);
+      else if (data.query && data.query.trim().toLowerCase() !== q.trim().toLowerCase()) setCorrected(data.query);
       setResults(data.recipes ?? []);
       setStatus("done");
     } catch {
@@ -51,9 +54,10 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
     setWebStatus("loading");
     try {
       const res = await fetch(`/api/search/web?q=${encodeURIComponent(q)}`);
-      const data = (await res.json()) as { recipes?: Recipe[] };
+      const data = (await res.json()) as { query?: string; recipes?: Recipe[] };
       if (id !== latestWeb.current) return;
       if (!res.ok) throw new Error();
+      if (data.query && data.query.trim().toLowerCase() !== q.trim().toLowerCase()) setCorrected(data.query);
       setWeb(data.recipes ?? []);
       setWebStatus("done");
     } catch {
@@ -79,6 +83,7 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
   function submit(value: string) {
     if (looksLikeUrl(value)) return importLink(value);
     setBlocked(undefined);
+    setCorrected(undefined);
     setQuery(value);
     router.replace(`/search?q=${encodeURIComponent(value)}`, { scroll: false });
   }
@@ -152,6 +157,12 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
           <Section title="Start with one of ours" hint="Works offline">
             <Grid recipes={DEFAULT_RECIPES} onOpen={open} />
           </Section>
+        )}
+
+        {corrected && found.length > 0 && (
+          <p className="mt-2 text-sm text-muted">
+            Showing results for <span className="font-medium text-ink">“{corrected}”</span>
+          </p>
         )}
 
         {/* One list: our recipe database's matches first, then the web's. */}
