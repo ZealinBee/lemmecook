@@ -264,7 +264,7 @@ function SignIn() {
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="h-12 min-w-0 flex-1 rounded-full border border-line bg-card px-4 text-[0.95rem] text-ink outline-none focus:border-clay/60"
+          className="h-12 min-w-0 flex-1 rounded-full border border-line bg-card px-4 text-[1rem] text-ink outline-none focus:border-clay/60"
         />
         <button type="submit" className="h-12 shrink-0 rounded-full border border-line px-5 text-sm font-medium text-ink active:bg-oat">
           Email me a link

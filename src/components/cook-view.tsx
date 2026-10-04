@@ -648,7 +648,7 @@ function ScalePicker({ scale, onScale, className = "" }: { scale: number; onScal
             }}
             onBlur={() => setEditing(false)}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-            className="w-10 bg-transparent text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-10 bg-transparent text-center text-[1rem] outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
           />
           ×
         </label>

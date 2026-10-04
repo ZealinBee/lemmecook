@@ -14,12 +14,14 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { DEFAULT_RECIPES } from "@/lib/default-recipes";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
+import { PLANS } from "@/lib/plans";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_OPEN_GRAPH, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: { absolute: SITE_TITLE },
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
+  openGraph: { ...SITE_OPEN_GRAPH, title: SITE_TITLE, description: SITE_DESCRIPTION, url: "/" },
 };
 
 const STEPS = [
@@ -167,7 +169,21 @@ const jsonLd = [
     applicationCategory: "LifestyleApplication",
     operatingSystem: "Any (web browser)",
     browserRequirements: "Requires a modern browser with microphone access for voice control.",
-    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    offers: [
+      { "@type": "Offer", name: "Free", price: "0", priceCurrency: "USD" },
+      ...Object.values(PLANS).map((p) => ({
+        "@type": "Offer",
+        name: `Premium (${p.label})`,
+        price: p.price.replace("$", ""),
+        priceCurrency: "USD",
+        priceSpecification: {
+          "@type": "UnitPriceSpecification",
+          price: p.price.replace("$", ""),
+          priceCurrency: "USD",
+          billingDuration: p.per === "year" ? "P1Y" : "P1M",
+        },
+      })),
+    ],
     featureList: FEATURES.map((f) => f.title),
   },
   {
