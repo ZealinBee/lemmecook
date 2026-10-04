@@ -1,7 +1,9 @@
 import type { Recipe } from "./types";
 
 const KEY = "lemme-cook:recipes";
-const MAX = 20;
+/** How many recipes are kept on the device. */
+export const FREE_MAX = 20;
+export const PREMIUM_MAX = 200;
 
 export function parseAll(raw: string | null): Recipe[] {
   try {
@@ -27,14 +29,19 @@ export function getRecipe(id: string): Recipe | undefined {
   return readAll().find((r) => r.id === id);
 }
 
-export function saveRecipe(recipe: Recipe) {
+export function saveRecipe(recipe: Recipe, max = FREE_MAX) {
   const rest = readAll().filter((r) => r.id !== recipe.id && (!recipe.sourceUrl || r.sourceUrl !== recipe.sourceUrl));
   try {
-    localStorage.setItem(KEY, JSON.stringify([recipe, ...rest].slice(0, MAX)));
+    localStorage.setItem(KEY, JSON.stringify([recipe, ...rest].slice(0, max)));
     emit();
   } catch {
     // Storage full or disabled — the recipe still works for this session via memory.
   }
+}
+
+/** Already saved on this device, so opening it again doesn't use up the free allowance. */
+export function isSaved(recipe: Pick<Recipe, "id" | "sourceUrl">) {
+  return readAll().some((r) => r.id === recipe.id || (!!recipe.sourceUrl && r.sourceUrl === recipe.sourceUrl));
 }
 
 export function removeRecipe(id: string) {

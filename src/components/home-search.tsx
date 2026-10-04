@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRightIcon, ListIcon } from "@/components/icons";
+import { ArrowRightIcon, ListIcon, LockIcon } from "@/components/icons";
 import { RecipeRow } from "@/components/recipe-card";
 import { SearchBar } from "@/components/search-bar";
 import { looksLikeUrl, useOpenRecipe } from "@/hooks/use-open-recipe";
 import { useRecipes } from "@/hooks/use-recipes";
+import { useAccount } from "@/lib/account";
 import { CATEGORIES } from "@/lib/default-recipes";
 import { looksLikeRoundup, parseRecipeText } from "@/lib/parse-text";
+import { FREE_RECIPES_PER_MONTH } from "@/lib/plans";
 import { removeRecipe } from "@/lib/storage";
+import { useUsage } from "@/lib/usage";
 
 /** A paste that's clearly a whole recipe rather than a search or link. */
 function looksLikeRecipeText(text: string) {
@@ -21,6 +24,8 @@ function looksLikeRecipeText(text: string) {
 export function HomeSearch() {
   const router = useRouter();
   const { recipes } = useRecipes();
+  const account = useAccount();
+  const used = useUsage();
   const { open, importLink, importing, error, setError, suggestPaste } = useOpenRecipe();
   const [query, setQuery] = useState("");
   const [textMode, setTextMode] = useState(false);
@@ -147,18 +152,43 @@ export function HomeSearch() {
                 recipe={r}
                 onOpen={() => router.push(`/cook/${r.id}`)}
                 trailing={
-                  <button
-                    onClick={() => removeRecipe(r.id)}
-                    aria-label={`Remove ${r.title}`}
-                    className="mr-2 rounded-full px-3 py-2 text-xs text-muted active:bg-oat"
-                  >
-                    Remove
-                  </button>
+                  account.premium ? (
+                    <button
+                      onClick={() => removeRecipe(r.id)}
+                      aria-label={`Remove ${r.title}`}
+                      className="mr-2 rounded-full px-3 py-2 text-xs text-muted active:bg-oat"
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    // Free recipes are counted per month, so removing one wouldn't free up a slot anyway.
+                    <Link
+                      href="/premium?reason=remove"
+                      aria-label={`Removing ${r.title} needs Premium`}
+                      className="mr-2 flex items-center gap-1 rounded-full px-3 py-2 text-xs text-muted active:bg-oat"
+                    >
+                      <LockIcon width={12} height={12} /> Remove
+                    </Link>
+                  )
                 }
               />
             ))}
           </ul>
         </section>
+      )}
+
+      {account.ready && !account.premium && used !== undefined && (
+        <Link
+          href="/premium"
+          className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-2xl bg-paper px-4 py-3 text-sm active:bg-oat"
+        >
+          <span className="text-ink-soft">
+            {used >= FREE_RECIPES_PER_MONTH
+              ? "You've used this month's free recipes"
+              : `${FREE_RECIPES_PER_MONTH - used} of ${FREE_RECIPES_PER_MONTH} free recipes left this month`}
+          </span>
+          <span className="shrink-0 font-medium text-clay">Go Premium</span>
+        </Link>
       )}
     </>
   );

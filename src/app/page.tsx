@@ -125,7 +125,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Is Lemme Cook free?",
-    a: "Yes. Lemme Cook is free to use in your browser, with no account or sign-up.",
+    a: "Yes. You can cook 3 new recipes a month for free in your browser, with no account or sign-up, and the built-in recipes are always free. Premium ($9.99 a month or $99.99 a year) unlocks unlimited recipes.",
   },
   {
     q: "Do I need to download an app?",
@@ -192,6 +192,9 @@ export default function Home() {
       <header className="flex items-center gap-2 px-5 py-3">
         <AppIcon width={26} height={26} />
         <span className="font-serif text-[1.35rem] tracking-tight">{SITE_NAME}</span>
+        <Link href="/premium" className="ml-auto rounded-full px-3 py-1.5 text-sm text-muted active:bg-oat">
+          Premium
+        </Link>
       </header>
 
       <section className="rise px-5 pt-8 pb-6">

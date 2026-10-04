@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { saveRecipe } from "@/lib/storage";
+import { useAccount } from "@/lib/account";
+import { isSaved, PREMIUM_MAX, saveRecipe } from "@/lib/storage";
+import { canOpenFree, recordOpen } from "@/lib/usage";
 import type { Recipe } from "@/lib/types";
 
 /** "allrecipes.com/…" or "https://…" — anything that should be imported rather than searched. */
@@ -19,18 +21,36 @@ export function useOpenRecipe() {
   /** We couldn't read the page, but the user can still copy the recipe text from it. */
   const [suggestPaste, setSuggestPaste] = useState(false);
 
+  const { premium } = useAccount();
+
+  /** Free users get a few new recipes a month; past that, send them to the paywall. */
+  const allowed = useCallback(
+    (recipe: Pick<Recipe, "id" | "sourceUrl">) => {
+      if (premium || isSaved(recipe) || canOpenFree(recipe)) return true;
+      router.push("/premium?reason=limit");
+      return false;
+    },
+    [premium, router],
+  );
+
   const open = useCallback(
     (recipe: Recipe) => {
       // Built-ins are always available; everything else is saved so it shows in "Recently cooked".
-      if (recipe.origin !== "builtin") saveRecipe({ ...recipe, savedAt: Date.now() });
+      if (recipe.origin !== "builtin") {
+        if (!allowed(recipe)) return;
+        if (!premium && !isSaved(recipe)) recordOpen(recipe);
+        saveRecipe({ ...recipe, savedAt: Date.now() }, premium ? PREMIUM_MAX : undefined);
+      }
       router.push(`/cook/${recipe.id}`);
     },
-    [router],
+    [allowed, premium, router],
   );
 
   const importLink = useCallback(
     async (input: string) => {
       const url = /^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`;
+      // Check before fetching so we don't make them wait just to hit the paywall.
+      if (!allowed({ id: "", sourceUrl: url })) return;
       setImporting(true);
       setError(null);
       setSuggestPaste(false);
@@ -63,7 +83,7 @@ export function useOpenRecipe() {
         setImporting(false);
       }
     },
-    [open, router],
+    [allowed, open, router],
   );
 
   return { open, importLink, importing, error, setError, suggestPaste };

@@ -120,6 +120,12 @@ export const RepeatIcon = (p: P) => (
 );
 
 /** The app icon (same artwork as src/app/icon.svg), for the header. */
+export const LockIcon = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </svg>
+);
 export const AppIcon = (p: P) => (
   <svg width={26} height={26} viewBox="0 0 64 64" aria-hidden {...p}>
     <rect width="64" height="64" rx="14" fill="#D97757" />
