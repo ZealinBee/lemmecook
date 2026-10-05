@@ -31,9 +31,13 @@ export function HomeSearch() {
   const [textMode, setTextMode] = useState(false);
   const [text, setText] = useState("");
 
-  function submit(value: string) {
-    if (looksLikeUrl(value)) importLink(value);
-    else router.push(`/search?q=${encodeURIComponent(value)}`);
+  async function submit(value: string) {
+    if (!looksLikeUrl(value)) return router.push(`/search?q=${encodeURIComponent(value)}`);
+    const caption = await importLink(value);
+    if (caption) {
+      setText(caption);
+      setTextMode(true);
+    }
   }
 
   function handlePastedText(pasted: string) {

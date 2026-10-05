@@ -46,8 +46,9 @@ export function useOpenRecipe() {
     [allowed, premium, router],
   );
 
+  /** Resolves to a social post's caption when it was readable but not a whole recipe, for the user to finish. */
   const importLink = useCallback(
-    async (input: string) => {
+    async (input: string): Promise<string | undefined> => {
       const url = /^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`;
       // Check before fetching so we don't make them wait just to hit the paywall.
       if (!allowed({ id: "", sourceUrl: url })) return;
@@ -66,6 +67,8 @@ export function useOpenRecipe() {
           suggestPaste?: boolean;
           /** Set when the site blocked us: the dish named in the link, to look up elsewhere. */
           dish?: string;
+          /** A TikTok/Instagram/Facebook caption that's only part of a recipe. */
+          text?: string;
         };
         if (data.dish) {
           const from = new URL(url).hostname.replace(/^www\./, "");
@@ -75,7 +78,9 @@ export function useOpenRecipe() {
         }
         if (!res.ok || !data.recipe) {
           setSuggestPaste(!!data.suggestPaste);
-          throw new Error(data.error ?? "Something went wrong.");
+          setError(data.error ?? "Something went wrong.");
+          setImporting(false);
+          return data.text;
         }
         open({ ...data.recipe, id: crypto.randomUUID().slice(0, 8), savedAt: Date.now() });
       } catch (err) {

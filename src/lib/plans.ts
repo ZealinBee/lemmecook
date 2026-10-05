@@ -17,7 +17,7 @@ export function planForPlayBasePlan(basePlanId: string | null | undefined): Plan
 }
 
 /** Free users can open this many new recipes per calendar month. */
-export const FREE_RECIPES_PER_MONTH = 3;
+export const FREE_RECIPES_PER_MONTH = 5;
 
 /**
  * Statuses that still get Premium. past_due keeps access while Stripe retries the card.

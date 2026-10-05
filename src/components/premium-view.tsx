@@ -14,6 +14,7 @@ import { resetDate, useUsage } from "@/lib/usage";
 
 const PERKS = [
   "Unlimited recipes, every month",
+  "Convert recipes between metric and US units",
   "Remove recipes you're done with",
   `Keep up to ${PREMIUM_MAX} recipes on your device instead of ${FREE_MAX}`,
   "Support an independent cooking app",
@@ -33,7 +34,7 @@ export function PremiumView({
   reason,
   checkoutSuccess,
 }: {
-  reason?: "limit" | "remove";
+  reason?: "limit" | "remove" | "convert";
   checkoutSuccess: boolean;
 }) {
   const account = useAccount();
@@ -140,6 +141,9 @@ export function PremiumView({
           Removing recipes is a Premium feature. Free recipes count toward your monthly {FREE_RECIPES_PER_MONTH} whether
           you keep them or not.
         </Notice>
+      )}
+      {!account.premium && reason === "convert" && (
+        <Notice>Converting units is a Premium feature. Switch any recipe to metric or US measures in one tap.</Notice>
       )}
       {syncing && account.signedIn && <Notice tone="calm">Payment received. Unlocking Premium…</Notice>}
 

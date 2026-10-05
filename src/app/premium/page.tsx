@@ -16,7 +16,7 @@ export default async function PremiumPage({ searchParams }: PageProps<"/premium"
   const { reason, checkout } = await searchParams;
   return (
     <PremiumView
-      reason={reason === "limit" || reason === "remove" ? reason : undefined}
+      reason={reason === "limit" || reason === "remove" || reason === "convert" ? reason : undefined}
       checkoutSuccess={checkout === "success"}
     />
   );

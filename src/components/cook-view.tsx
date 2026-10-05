@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   ArrowLeftIcon,
@@ -29,7 +30,9 @@ import { formatScale, scaleIngredient, SCALES } from "@/lib/scale";
 import { useTimers, type Timer } from "@/hooks/use-timers";
 import { useVoiceControl } from "@/hooks/use-voice-control";
 import { useWakeLock } from "@/hooks/use-wake-lock";
+import { useAccount } from "@/lib/account";
 import type { Recipe } from "@/lib/types";
+import { convertUnits, UNIT_SYSTEMS, type UnitSystem } from "@/lib/units";
 import {
   findStepTimers,
   formatClock,
@@ -87,6 +90,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [checked, setChecked] = useState<Set<number>>(() => new Set());
   const [scale, setScale] = useState(1);
+  const [units, setUnits] = useState<UnitSystem>("original");
   const [toast, setToast] = useState<string | null>(null);
 
   const screenOn = useWakeLock(true);
@@ -116,9 +120,9 @@ function Cook({ recipe }: { recipe: Recipe }) {
       const s = recipe.steps[i];
       if (!s) return "";
       const prefix = stepPrefix(lang, i, i === total - 1 && total > 1);
-      return `${prefix} ${s.section && s.section !== recipe.steps[i - 1]?.section ? `${s.section}. ` : ""}${s.text}`;
+      return `${prefix} ${s.section && s.section !== recipe.steps[i - 1]?.section ? `${s.section}. ` : ""}${convertUnits(s.text, units)}`;
     },
-    [recipe.steps, total, lang],
+    [recipe.steps, total, lang, units],
   );
 
   // Only ever speaks when asked ("read aloud" or the button) — never automatically.
@@ -250,6 +254,8 @@ function Cook({ recipe }: { recipe: Recipe }) {
           onToggle={toggleChecked}
           scale={scale}
           onScale={setScale}
+          units={units}
+          onUnits={setUnits}
           onStart={startCooking}
         />
       )}
@@ -258,6 +264,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
         <StepView
           recipe={recipe}
           step={step}
+          units={units}
           onPrev={() => goTo(step - 1)}
           onNext={() => goTo(step + 1)}
           onClose={() => setView("overview")}
@@ -295,8 +302,9 @@ function Cook({ recipe }: { recipe: Recipe }) {
       )}
 
       <BottomSheet open={sheet === "ingredients"} onClose={() => setSheet(null)} title="Ingredients">
-        <ScalePicker scale={scale} onScale={setScale} className="mb-3" />
-        <IngredientList items={recipe.ingredients} scale={scale} checked={checked} onToggle={toggleChecked} />
+        <ScalePicker scale={scale} onScale={setScale} className="mb-2" />
+        <UnitPicker units={units} onUnits={setUnits} className="mb-3" />
+        <IngredientList items={recipe.ingredients} scale={scale} units={units} checked={checked} onToggle={toggleChecked} />
       </BottomSheet>
 
       <BottomSheet open={sheet === "help"} onClose={() => setSheet(null)} title="Say things like…">
@@ -340,6 +348,8 @@ function Overview({
   onToggle,
   scale,
   onScale,
+  units,
+  onUnits,
   onStart,
 }: {
   recipe: Recipe;
@@ -348,6 +358,8 @@ function Overview({
   onToggle: (i: number) => void;
   scale: number;
   onScale: (f: number) => void;
+  units: UnitSystem;
+  onUnits: (u: UnitSystem) => void;
   onStart: (at?: number) => void;
 }) {
   const meta = [
@@ -413,8 +425,9 @@ function Overview({
               {checked.size} of {recipe.ingredients.length} ready
             </span>
           </div>
-          <ScalePicker scale={scale} onScale={onScale} className="mb-3" />
-          <IngredientList items={recipe.ingredients} scale={scale} checked={checked} onToggle={onToggle} />
+          <ScalePicker scale={scale} onScale={onScale} className="mb-2" />
+          <UnitPicker units={units} onUnits={onUnits} className="mb-3" />
+          <IngredientList items={recipe.ingredients} scale={scale} units={units} checked={checked} onToggle={onToggle} />
         </section>
 
         <section className="mt-10">
@@ -430,7 +443,7 @@ function Overview({
                   className="flex w-full gap-4 rounded-2xl border border-line bg-card p-4 text-left active:bg-paper"
                 >
                   <span className="font-serif text-lg text-clay tabular-nums">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="line-clamp-3 text-[0.95rem] leading-relaxed text-ink-soft">{s.text}</span>
+                  <span className="line-clamp-3 text-[0.95rem] leading-relaxed text-ink-soft">{convertUnits(s.text, units)}</span>
                 </button>
               </li>
             ))}
@@ -459,6 +472,7 @@ function Overview({
 function StepView({
   recipe,
   step,
+  units,
   onPrev,
   onNext,
   onClose,
@@ -468,6 +482,7 @@ function StepView({
 }: {
   recipe: Recipe;
   step: number;
+  units: UnitSystem;
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -476,12 +491,13 @@ function StepView({
   controls: ReactNode;
 }) {
   const s = recipe.steps[step];
+  const text = convertUnits(s.text, units);
   const total = recipe.steps.length;
   const chips = findStepTimers(s.text);
   const start = useRef<{ x: number; y: number } | null>(null);
 
   const size =
-    s.text.length < 110 ? "text-[2rem] leading-[1.18]" : s.text.length < 240 ? "text-[1.6rem] leading-[1.25]" : "text-[1.3rem] leading-[1.4]";
+    text.length < 110 ? "text-[2rem] leading-[1.18]" : text.length < 240 ? "text-[1.6rem] leading-[1.25]" : "text-[1.3rem] leading-[1.4]";
 
   function onPointerDown(e: PointerEvent) {
     start.current = { x: e.clientX, y: e.clientY };
@@ -535,7 +551,7 @@ function StepView({
           <span className="font-serif text-[4.5rem] leading-none text-clay/25 tabular-nums">
             {String(step + 1).padStart(2, "0")}
           </span>
-          <p className={`mt-2 font-serif tracking-[-0.01em] text-ink ${size}`}>{s.text}</p>
+          <p className={`mt-2 font-serif tracking-[-0.01em] text-ink ${size}`}>{text}</p>
 
           {(chips.length > 0 || speech) && (
             <div className="mt-8 flex flex-wrap gap-2">
@@ -669,14 +685,40 @@ function ScalePicker({ scale, onScale, className = "" }: { scale: number; onScal
   );
 }
 
+/** Converting units is a Premium feature; free users are sent to the upgrade page. */
+function UnitPicker({ units, onUnits, className = "" }: { units: UnitSystem; onUnits: (u: UnitSystem) => void; className?: string }) {
+  const { premium } = useAccount();
+  const router = useRouter();
+  return (
+    <div role="radiogroup" aria-label="Units" className={`flex gap-1 rounded-full bg-paper p-1 ${className}`}>
+      {UNIT_SYSTEMS.map(({ id, label }) => (
+        <button
+          key={id}
+          role="radio"
+          aria-checked={id === units}
+          onClick={() => (premium || id === "original" ? onUnits(id) : router.push("/premium?reason=convert"))}
+          className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full text-sm transition ${
+            id === units ? "bg-card font-medium text-ink shadow-sm" : "text-muted active:bg-oat"
+          }`}
+        >
+          {label}
+          {!premium && id !== "original" && <SparkIcon width={12} height={12} className="text-clay" aria-label="Premium" />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function IngredientList({
   items,
   scale,
+  units,
   checked,
   onToggle,
 }: {
   items: string[];
   scale: number;
+  units: UnitSystem;
   checked: Set<number>;
   onToggle: (i: number) => void;
 }) {
@@ -699,7 +741,7 @@ function IngredientList({
                 {on && <CheckIcon width={14} height={14} strokeWidth={2.6} />}
               </span>
               <span className={`text-[1rem] leading-snug transition ${on ? "text-muted line-through decoration-muted/50" : "text-ink"}`}>
-                {scaleIngredient(item, scale)}
+                {convertUnits(scaleIngredient(item, scale), units)}
               </span>
             </button>
           </li>

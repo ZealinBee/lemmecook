@@ -1,5 +1,6 @@
 import { extractRecipe } from "@/lib/parse-recipe";
 import { extractRussianFood } from "@/lib/sites/russianfood";
+import { fetchPost, linkInCaption, recipeFromPost, socialPlatform, tidyCaption, type Platform } from "@/lib/sites/social";
 import { BROWSER_HEADERS, decodeHtml, PRIVATE_HOST } from "@/lib/fetch-page";
 
 /** "/recipe/24074/alysias-basic-meat-lasagna/" → "alysias basic meat lasagna". */
@@ -17,6 +18,34 @@ function dishFromUrl(url: URL): string | undefined {
   return dish || undefined;
 }
 
+/** TikTok, Instagram and Facebook have no recipe markup: the recipe, if any, is in the caption. */
+async function importPost(url: URL, platform: Platform): Promise<Response> {
+  const post = await fetchPost(url, platform).catch(() => undefined);
+  if (!post) {
+    return Response.json(
+      { error: `Couldn't read that ${platform} post. It may be private or deleted.`, suggestPaste: true },
+      { status: 502 },
+    );
+  }
+  const recipe = recipeFromPost(post, url.toString());
+  if (recipe) return Response.json({ recipe });
+
+  // "Full recipe on my blog: https://…" — the linked page usually has the real thing.
+  const link = linkInCaption(post.caption);
+  if (link && !PRIVATE_HOST.test(link.hostname)) {
+    const res = await importPage(link);
+    if (res.ok) return res;
+  }
+  return Response.json(
+    {
+      error: `That ${platform} post doesn't write out the whole recipe. Here's its caption. Fill in what's missing from the video.`,
+      suggestPaste: true,
+      text: tidyCaption(post.caption),
+    },
+    { status: 422 },
+  );
+}
+
 export async function POST(request: Request) {
   let url: URL;
   try {
@@ -29,6 +58,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "Only public http(s) links are supported." }, { status: 400 });
   }
 
+  const platform = socialPlatform(url);
+  return platform ? importPost(url, platform) : importPage(url);
+}
+
+async function importPage(url: URL): Promise<Response> {
   let html: string;
   try {
     const res = await fetch(url, {

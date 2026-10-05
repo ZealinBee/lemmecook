@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { Recipe } from "@/lib/types";
 import { SparkIcon } from "./icons";
 
@@ -23,10 +26,18 @@ export function RecipeCover({
   className?: string;
   variant?: "thumb" | "card" | "hero" | "plain";
 }) {
-  if (recipe.image) {
+  // Instagram and Facebook image links expire after a few weeks; fall back to the color card.
+  const [broken, setBroken] = useState<string>();
+  if (recipe.image && broken !== recipe.image) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts
-      <img src={recipe.image} alt="" loading="lazy" className={`bg-oat object-cover ${className}`} />
+      <img
+        src={recipe.image}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(recipe.image)}
+        className={`bg-oat object-cover ${className}`}
+      />
     );
   }
 

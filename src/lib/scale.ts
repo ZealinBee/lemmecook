@@ -22,7 +22,7 @@ const GLYPHS: Record<string, number> = {
 const G = Object.keys(GLYPHS).join("");
 
 // "1 1/2", "1½", "1/2", "½", "1.5", "1,5", "2"
-const NUM = `(?:\\d+\\s+\\d+/\\d+|\\d+\\s*[${G}]|\\d+/\\d+|\\d+(?:[.,]\\d+)?|[${G}])`;
+export const NUM = `(?:\\d+\\s+\\d+/\\d+|\\d+\\s*[${G}]|\\d+/\\d+|\\d+(?:[.,]\\d+)?|[${G}])`;
 // A number, optionally a range: "1-2", "2 – 3", "3 to 4"
 const QTY = new RegExp(`(?<![\\w/])(${NUM})(?:(\\s*(?:-|–|—|to)\\s*)(${NUM}))?(?![\\d/])`, "g");
 
@@ -38,7 +38,7 @@ const FRACTIONS: [number, string][] = [
   [1, ""],
 ];
 
-function parse(s: string): number {
+export function parse(s: string): number {
   s = s.trim();
   let m = s.match(/^(\d+)\s+(\d+)\/(\d+)$/);
   if (m) return +m[1] + +m[2] / +m[3];
@@ -50,7 +50,7 @@ function parse(s: string): number {
   return parseFloat(s.replace(",", "."));
 }
 
-function format(n: number, decimal: "." | "," | null): string {
+export function format(n: number, decimal: "." | "," | null): string {
   if (n >= 10) return String(Math.round(n));
   // The recipe wrote "1.5" or "2,5 dl" — answer in kind.
   if (decimal) {

@@ -4,7 +4,7 @@ import { parseDuration } from "./voice-commands";
 type Parsed = Omit<Recipe, "id" | "savedAt">;
 
 const INGREDIENTS_HEADER = /^(ingredients?|ingredient list|what you(?:'|’)?ll need|you(?:'|’)?ll need|you will need|shopping list)\b/i;
-const STEPS_HEADER = /^(instructions?|directions?|method|steps|preparation|how to make(?: it)?|to make)\b/i;
+const STEPS_HEADER = /^(instructions?|directions?|method|steps|preparation|how to(?: make(?: it)?)?|to make)\b/i;
 const NOTES_HEADER = /^(notes?|tips?|nutrition(?: facts| information)?|storage|equipment|serving suggestions?)\b/i;
 
 /** "## Ingredients:", "**INGREDIENTS (serves 4)**" → "Ingredients (serves 4)". */

@@ -14,7 +14,7 @@ import {
   UsersIcon,
 } from "@/components/icons";
 import { DEFAULT_RECIPES } from "@/lib/default-recipes";
-import { PLANS } from "@/lib/plans";
+import { FREE_RECIPES_PER_MONTH, PLANS } from "@/lib/plans";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_OPEN_GRAPH, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -127,7 +127,7 @@ const FAQS: { q: string; a: string }[] = [
   },
   {
     q: "Is Lemme Cook free?",
-    a: "Yes. You can cook 3 new recipes a month for free in your browser, with no account or sign-up, and the built-in recipes are always free. Premium ($9.99 a month or $99.99 a year) unlocks unlimited recipes.",
+    a: `Yes. You can cook ${FREE_RECIPES_PER_MONTH} new recipes a month for free in your browser, with no account or sign-up, and the built-in recipes are always free. Premium (${PLANS.monthly.price} a month or ${PLANS.yearly.price} a year) unlocks unlimited recipes.`,
   },
   {
     q: "Do I need to download an app?",
