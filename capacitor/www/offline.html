@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Lemme Cook</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #faf9f5; --ink: #1f1e1d; --muted: #6b6a66; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1f1e1d; --ink: #faf9f5; --muted: #a3a29d; } }
+    body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: var(--bg); color: var(--ink);
+      font: 16px/1.5 system-ui, sans-serif; text-align: center; padding: 0 24px; }
+    h1 { font-family: Georgia, serif; font-weight: 400; font-size: 2rem; margin: 0 0 8px; }
+    p { color: var(--muted); margin: 0 0 24px; }
+    button { height: 48px; padding: 0 28px; border: 0; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>You're offline</h1>
+    <p>Lemme Cook needs a connection to load. Check your Wi-Fi or data and try again.</p>
+    <button onclick="history.back(); setTimeout(() => location.reload(), 300)">Try again</button>
+  </main>
+</body>
+</html>

@@ -1,16 +1,26 @@
 export type PlanId = "monthly" | "yearly";
 
-export const PLANS: Record<PlanId, { priceId: string; price: string; per: string; label: string }> = {
-  monthly: { priceId: "price_1UMomoLnkm23IhVvR62Kdqre", price: "$9.99", per: "month", label: "Monthly" },
-  yearly: { priceId: "price_1UMon5Lnkm23IhVvXiX0vCqF", price: "$99.99", per: "year", label: "Yearly" },
+export const PLANS: Record<PlanId, { priceId: string; playBasePlanId: string; price: string; per: string; label: string }> = {
+  monthly: { priceId: "price_1UMomoLnkm23IhVvR62Kdqre", playBasePlanId: "monthly", price: "$9.99", per: "month", label: "Monthly" },
+  yearly: { priceId: "price_1UMon5Lnkm23IhVvXiX0vCqF", playBasePlanId: "yearly", price: "$99.99", per: "year", label: "Yearly" },
 };
+
+/** The Google Play subscription product; each plan is one of its base plans. */
+export const PLAY_PRODUCT_ID = "premium";
 
 export function planForPrice(priceId: string | null | undefined): PlanId | undefined {
   return (Object.keys(PLANS) as PlanId[]).find((id) => PLANS[id].priceId === priceId);
 }
 
+export function planForPlayBasePlan(basePlanId: string | null | undefined): PlanId | undefined {
+  return (Object.keys(PLANS) as PlanId[]).find((id) => PLANS[id].playBasePlanId === basePlanId);
+}
+
 /** Free users can open this many new recipes per calendar month. */
 export const FREE_RECIPES_PER_MONTH = 3;
 
-/** Stripe statuses that still get Premium. past_due keeps access while Stripe retries the card. */
+/**
+ * Statuses that still get Premium. past_due keeps access while Stripe retries the card.
+ * Google Play states are mapped onto these in lib/google-play.ts.
+ */
 export const ACTIVE_STATUSES = new Set(["active", "trialing", "past_due"]);

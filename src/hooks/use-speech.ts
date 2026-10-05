@@ -1,6 +1,8 @@
 "use client";
 
+import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { isAndroidApp } from "@/lib/native";
 
 const noopSubscribe = () => () => {};
 
@@ -33,9 +35,12 @@ function chunks(text: string): string[] {
 
 const words = (s: string) => s.toLowerCase().match(/[\p{L}\p{N}']+/gu) ?? [];
 
-/** Free, on-device text to speech via the browser's Web Speech API. Speaks only when `speak` is called. */
+/**
+ * Free, on-device text to speech via the browser's Web Speech API, or Android's own TTS engine in the
+ * app (its WebView has no speechSynthesis). Speaks only when `speak` is called.
+ */
 export function useSpeech() {
-  const supported = useSyncExternalStore(noopSubscribe, () => Boolean(synth()), () => false);
+  const supported = useSyncExternalStore(noopSubscribe, () => isAndroidApp() || Boolean(synth()), () => false);
   const [speaking, setSpeaking] = useState(false);
   // Best voice per language, rebuilt when the browser's voice list loads.
   const voices = useRef(new Map<string, SpeechSynthesisVoice | undefined>());
@@ -43,8 +48,11 @@ export function useSpeech() {
   const spoken = useRef({ text: "", until: 0 });
   // Chrome garbage-collects unreferenced utterances and then never fires their onend.
   const queue = useRef<SpeechSynthesisUtterance[]>([]);
+  // Bumped on every speak/stop, so a native utterance that was cut off doesn't end the next one.
+  const nativeRun = useRef(0);
 
   useEffect(() => {
+    if (isAndroidApp()) return () => void TextToSpeech.stop().catch(() => {});
     const s = synth();
     if (!s) return;
     const load = () => voices.current.clear();
@@ -56,6 +64,10 @@ export function useSpeech() {
   }, []);
 
   const stop = useCallback(() => {
+    if (isAndroidApp()) {
+      nativeRun.current++;
+      TextToSpeech.stop().catch(() => {});
+    }
     synth()?.cancel();
     setSpeaking(false);
     spoken.current.until = Date.now() + 800;
@@ -63,6 +75,20 @@ export function useSpeech() {
 
   /** `lang` is the text's language ("ru", "de"…); omit to use the browser's. */
   const speak = useCallback((text: string, lang?: string) => {
+    if (isAndroidApp()) {
+      if (!text.trim()) return;
+      const run = ++nativeRun.current;
+      spoken.current = { text, until: Number.POSITIVE_INFINITY };
+      setSpeaking(true);
+      const done = () => {
+        if (run !== nativeRun.current) return;
+        setSpeaking(false);
+        spoken.current.until = Date.now() + 1200;
+      };
+      // Android's engine has no per-utterance time limit, so no need to chunk. speak() flushes anything still playing.
+      TextToSpeech.speak({ text, lang: lang ?? navigator.language, rate: 0.95 }).then(done, done);
+      return;
+    }
     const s = synth();
     if (!s || !text.trim()) return;
     s.cancel();
@@ -98,7 +124,7 @@ export function useSpeech() {
   const isEcho = useCallback((heard: string) => {
     // Don't trust onend alone: if it never fired, the mic would ignore the cook forever.
     const s = synth();
-    if (spoken.current.until === Number.POSITIVE_INFINITY && !s?.speaking && !s?.pending) {
+    if (!isAndroidApp() && spoken.current.until === Number.POSITIVE_INFINITY && !s?.speaking && !s?.pending) {
       spoken.current.until = Date.now() + 1200;
       setSpeaking(false);
     }

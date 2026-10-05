@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Newsreader } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { NativeBridge } from "@/components/native-bridge";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_OPEN_GRAPH, SITE_TITLE, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${inter.variable} ${serif.variable} h-full antialiased`}>
       <body className="min-h-dvh" suppressHydrationWarning>
         {children}
+        <NativeBridge />
         <Analytics />
       </body>
     </html>

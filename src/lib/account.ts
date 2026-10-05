@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { ACTIVE_STATUSES, planForPrice, type PlanId } from "./plans";
+import { ACTIVE_STATUSES, planForPlayBasePlan, planForPrice, type PlanId } from "./plans";
 import { supabase } from "./supabase/client";
 
 export type Account = {
@@ -10,6 +10,8 @@ export type Account = {
   email: string | null;
   signedIn: boolean;
   premium: boolean;
+  /** Where the subscription was bought: Stripe on the web, or Google Play in the Android app. */
+  provider?: "stripe" | "google_play";
   plan?: PlanId;
   status?: string;
   periodEnd?: string;
@@ -34,20 +36,38 @@ function set(next: Account) {
 
 async function load(userId: string | undefined, email: string | null) {
   if (!userId) return set({ ...SIGNED_OUT, ready: true });
-  const { data } = await supabase
-    .from("subscriptions")
-    .select("status, price_id, current_period_end, cancel_at_period_end")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const [{ data: stripe }, { data: play }] = await Promise.all([
+    supabase
+      .from("subscriptions")
+      .select("status, price_id, current_period_end, cancel_at_period_end")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("play_subscriptions")
+      .select("status, base_plan_id, current_period_end, cancel_at_period_end")
+      .eq("user_id", userId)
+      .order("current_period_end", { ascending: false, nullsFirst: false }),
+  ]);
+  const isActive = (status: string | null | undefined) => !!status && ACTIVE_STATUSES.has(status);
+  const playSub = play?.find((p) => isActive(p.status)) ?? play?.[0];
+
+  // Show whichever subscription grants Premium; Stripe first, as the older and more common one.
+  const sub =
+    isActive(stripe?.status) || (stripe?.status && !isActive(playSub?.status))
+      ? { ...stripe!, provider: "stripe" as const, plan: planForPrice(stripe!.price_id) }
+      : playSub
+        ? { ...playSub, provider: "google_play" as const, plan: planForPlayBasePlan(playSub.base_plan_id) }
+        : undefined;
   set({
     ready: true,
     email,
     signedIn: true,
-    premium: !!data?.status && ACTIVE_STATUSES.has(data.status),
-    plan: planForPrice(data?.price_id),
-    status: data?.status ?? undefined,
-    periodEnd: data?.current_period_end ?? undefined,
-    cancelAtPeriodEnd: data?.cancel_at_period_end ?? false,
+    premium: isActive(sub?.status),
+    provider: sub?.provider,
+    plan: sub?.plan,
+    status: sub?.status ?? undefined,
+    periodEnd: sub?.current_period_end ?? undefined,
+    cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false,
   });
 }
 
@@ -68,6 +88,12 @@ function start() {
 export async function refreshAccount() {
   const { data } = await supabase.auth.getSession();
   await load(data.session?.user.id, data.session?.user.email ?? null);
+}
+
+/** The signed-in user's id, e.g. to tie a Google Play purchase to the account. */
+export async function currentUserId() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id;
 }
 
 /** Headers that identify the signed-in user to our API routes. */

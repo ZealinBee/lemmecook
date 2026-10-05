@@ -1,9 +1,12 @@
 "use client";
 
+import { Browser } from "@capacitor/browser";
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { ArrowLeftIcon, CheckIcon, SparkIcon } from "@/components/icons";
-import { authHeaders, refreshAccount, useAccount } from "@/lib/account";
+import { authHeaders, currentUserId, refreshAccount, useAccount } from "@/lib/account";
+import { isAndroidApp, NATIVE_AUTH_CALLBACK } from "@/lib/native";
+import { buyOnPlay, managePlaySubscription, playPrices, restorePlayPurchases } from "@/lib/play-billing";
 import { FREE_RECIPES_PER_MONTH, PLANS, type PlanId } from "@/lib/plans";
 import { FREE_MAX, PREMIUM_MAX } from "@/lib/storage";
 import { supabase } from "@/lib/supabase/client";
@@ -15,6 +18,13 @@ const PERKS = [
   `Keep up to ${PREMIUM_MAX} recipes on your device instead of ${FREE_MAX}`,
   "Support an independent cooking app",
 ];
+
+const noopSubscribe = () => () => {};
+/** False during SSR and hydration, so server and client render the same markup first. */
+const useAndroidApp = () => useSyncExternalStore(noopSubscribe, isAndroidApp, () => false);
+
+/** The Play sheet rejects with a "cancelled" error when the user backs out; that isn't worth an alert. */
+const isCancel = (err: unknown) => err instanceof Error && /cancel/i.test(err.message);
 
 const fmtDate = (d: Date | string) =>
   new Date(d).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
@@ -32,6 +42,13 @@ export function PremiumView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(checkoutSuccess);
+  // In the Android app Premium is sold through Google Play, at Play's localized prices.
+  const android = useAndroidApp();
+  const [prices, setPrices] = useState<Partial<Record<PlanId, string>>>({});
+
+  useEffect(() => {
+    if (android) playPrices().then(setPrices, () => {});
+  }, [android]);
 
   // Back from Stripe: pull the subscription straight from Stripe so Premium unlocks right away.
   useEffect(() => {
@@ -54,6 +71,33 @@ export function PremiumView({
       window.location.href = data.url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
+      setBusy(false);
+    }
+  }
+
+  async function buy() {
+    setBusy(true);
+    setError(null);
+    try {
+      const userId = await currentUserId();
+      if (!userId) throw new Error("Sign in first.");
+      await buyOnPlay(plan, userId);
+    } catch (err) {
+      if (!isCancel(err)) setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restore() {
+    setBusy(true);
+    setError(null);
+    try {
+      const userId = await currentUserId();
+      if (userId && !(await restorePlayPurchases(userId))) setError("No Google Play subscription found on this device.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
       setBusy(false);
     }
   }
@@ -114,13 +158,20 @@ export function PremiumView({
             </p>
           )}
           {account.email && <p className="mt-1 text-sm text-muted">Signed in as {account.email}</p>}
-          <button
-            onClick={() => go("/api/billing/portal")}
-            disabled={busy}
-            className="mt-4 h-12 w-full rounded-full border border-line text-[0.95rem] font-medium text-ink active:bg-oat disabled:opacity-50"
-          >
-            Manage subscription
-          </button>
+          {account.provider === "google_play" && !android ? (
+            <p className="mt-4 text-sm text-muted">Billed through Google Play. Manage it in the Play Store app on your phone.</p>
+          ) : account.provider !== "google_play" && android ? (
+            // Play policy: no links out to other payment flows from the app.
+            <p className="mt-4 text-sm text-muted">Billed through our website. Manage it there from any browser.</p>
+          ) : (
+            <button
+              onClick={() => (android ? managePlaySubscription().catch(() => {}) : go("/api/billing/portal"))}
+              disabled={busy}
+              className="mt-4 h-12 w-full rounded-full border border-line text-[0.95rem] font-medium text-ink active:bg-oat disabled:opacity-50"
+            >
+              Manage subscription
+            </button>
+          )}
           <Link href="/" className="mt-2 block h-12 w-full rounded-full bg-ink text-center text-[0.95rem] leading-[3rem] font-medium text-ivory">
             Start cooking
           </Link>
@@ -156,16 +207,18 @@ export function PremiumView({
                     selected ? "border-clay bg-clay-wash/40 ring-1 ring-clay" : "border-line bg-card"
                   }`}
                 >
-                  {id === "yearly" && (
+                  {id === "yearly" && !android && (
                     <span className="absolute -top-2.5 right-3 rounded-full bg-clay px-2 py-0.5 text-[0.7rem] font-medium text-white">
                       Save 17%
                     </span>
                   )}
                   <span className="text-sm text-muted">{p.label}</span>
-                  <span className="mt-1 block font-serif text-[1.7rem] leading-none text-ink">{p.price}</span>
+                  <span className="mt-1 block font-serif text-[1.7rem] leading-none text-ink">
+                    {android ? (prices[id] ?? "…") : p.price}
+                  </span>
                   <span className="mt-1 block text-xs text-muted">
                     per {p.per}
-                    {id === "yearly" && " · $8.33/mo"}
+                    {id === "yearly" && !android && " · $8.33/mo"}
                   </span>
                 </button>
               );
@@ -178,15 +231,23 @@ export function PremiumView({
             ) : account.signedIn ? (
               <>
                 <button
-                  onClick={() => go("/api/billing/checkout", { plan })}
-                  disabled={busy}
+                  onClick={() => (android ? buy() : go("/api/billing/checkout", { plan }))}
+                  disabled={busy || (android && !prices[plan])}
                   className="h-12 w-full rounded-full bg-ink text-[0.95rem] font-medium text-ivory transition active:scale-[0.98] disabled:opacity-50"
                 >
-                  {busy ? "Opening checkout…" : `Get Premium · ${PLANS[plan].price}/${PLANS[plan].per}`}
+                  {busy
+                    ? "Opening checkout…"
+                    : `Get Premium · ${android ? (prices[plan] ?? "…") : PLANS[plan].price}/${PLANS[plan].per}`}
                 </button>
                 <p className="mt-3 text-center text-xs text-muted">
-                  Signed in as {account.email}. Cancel anytime. Secure payment by Stripe.
+                  Signed in as {account.email}. Cancel anytime.{" "}
+                  {android ? "Billed through Google Play." : "Secure payment by Stripe."}
                 </p>
+                {android && (
+                  <button onClick={restore} disabled={busy} className="mt-1 w-full py-2 text-center text-xs text-muted underline disabled:opacity-50">
+                    Restore purchase
+                  </button>
+                )}
               </>
             ) : (
               <SignIn />
@@ -225,6 +286,16 @@ function SignIn() {
   const redirectTo = () => `${window.location.origin}/premium`;
 
   async function google() {
+    // Google refuses sign-in inside a WebView, so the app opens it in a Custom Tab that returns via NATIVE_AUTH_CALLBACK.
+    if (isAndroidApp()) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: NATIVE_AUTH_CALLBACK, skipBrowserRedirect: true },
+      });
+      if (error) setError(error.message);
+      else if (data.url) await Browser.open({ url: data.url });
+      return;
+    }
     const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirectTo() } });
     if (error) setError(error.message);
   }
