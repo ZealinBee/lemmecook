@@ -2,7 +2,6 @@ import { extractRecipe } from "@/lib/parse-recipe";
 import { extractRussianFood } from "@/lib/sites/russianfood";
 import { fetchPost, linkInCaption, recipeFromPost, socialPlatform, tidyCaption, type Platform } from "@/lib/sites/social";
 import { BROWSER_HEADERS, decodeHtml, fetchArchived, PRIVATE_HOST } from "@/lib/fetch-page";
-import { requestIsPremium } from "@/lib/premium";
 import { canTranscribe, recipeFromVideo } from "@/lib/video-recipe";
 
 /** Room for downloading and transcribing a video when the caption isn't enough. */
@@ -24,7 +23,7 @@ function dishFromUrl(url: URL): string | undefined {
 }
 
 /** TikTok, Instagram and Facebook have no recipe markup: the recipe, if any, is in the caption. */
-async function importPost(url: URL, platform: Platform, request: Request): Promise<Response> {
+async function importPost(url: URL, platform: Platform): Promise<Response> {
   const post = await fetchPost(url, platform).catch(() => undefined);
   if (!post) {
     return Response.json(
@@ -42,10 +41,8 @@ async function importPost(url: URL, platform: Platform, request: Request): Promi
     if (res.ok) return res;
   }
 
-  // Last resort: listen to the video. It costs us per import, so it's a Premium feature.
-  const audio = canTranscribe(post);
-  const premium = audio && (await requestIsPremium(request));
-  if (premium) {
+  // Last resort: listen to the video.
+  if (canTranscribe(post)) {
     const fromVideo = await recipeFromVideo(post, url.toString());
     if (fromVideo) return Response.json({ recipe: fromVideo });
   }
@@ -54,8 +51,6 @@ async function importPost(url: URL, platform: Platform, request: Request): Promi
       error: `That ${platform} post doesn't write out the whole recipe. Here's its caption. Fill in what's missing from the video.`,
       suggestPaste: true,
       text: tidyCaption(post.caption),
-      /** Free user on a video we could have listened to: worth telling them Premium would. */
-      premiumAudio: audio && !premium,
     },
     { status: 422 },
   );
@@ -74,7 +69,7 @@ export async function POST(request: Request) {
   }
 
   const platform = socialPlatform(url);
-  return platform ? importPost(url, platform, request) : importPage(url);
+  return platform ? importPost(url, platform) : importPage(url);
 }
 
 async function importPage(url: URL): Promise<Response> {

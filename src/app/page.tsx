@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 const STEPS = [
   {
     title: "Find a recipe",
-    body: "Paste a link from your favorite recipe site, paste the recipe text itself, or search for one. Lemme Cook pulls out the ingredients and steps and drops the ads, pop-ups and life stories.",
+    body: "Paste a link from your favorite recipe site, TikTok or Instagram, paste the recipe text itself, or search for one. Lemme Cook pulls out the ingredients and steps and drops the ads, pop-ups and life stories.",
   },
   {
     title: "Get your ingredients ready",
@@ -78,7 +78,7 @@ const FEATURES: { icon: Icon; title: string; body: string }[] = [
   {
     icon: LinkIcon,
     title: "Works with almost any recipe",
-    body: "Food blogs, big recipe sites and family recipes typed out in a note all work. If a site blocks the link, paste the recipe text instead.",
+    body: "Food blogs, big recipe sites, TikTok and Instagram videos, and family recipes typed out in a note all work. If a site blocks the link, paste the recipe text instead.",
   },
   {
     icon: UsersIcon,
@@ -136,6 +136,10 @@ const FAQS: { q: string; a: string }[] = [
   {
     q: "Which recipe websites does it work with?",
     a: "Most recipe sites publish their recipes in a standard format that Lemme Cook can read, including big recipe sites and food blogs. If a site blocks the link, copy the recipe from the page and paste the text instead. Lemme Cook will find the ingredients and steps.",
+  },
+  {
+    q: "Can I cook recipes from TikTok and Instagram?",
+    a: "Yes. Paste a TikTok, Instagram or Facebook link and Lemme Cook reads the recipe from the post's caption, or from the creator's blog if the caption links to one. If the recipe is only spoken in a TikTok video, Lemme Cook listens to the video and writes the ingredients and steps out for you.",
   },
   {
     q: "Is the microphone always listening?",
@@ -219,7 +223,7 @@ export default function Home() {
           Cook <em className="text-clay italic">hands‑free</em>, one step at a time
         </h1>
         <p className="mt-3 text-[1.02rem] leading-relaxed text-muted">
-          Paste any recipe link or text, then cook with your voice. Say “next”, set timers and hear steps read aloud
+          Paste any recipe link, including TikTok and Instagram, or the recipe text, then cook with your voice. Say “next”, set timers and hear steps read aloud
           without touching your phone with messy hands.
         </p>
       </section>

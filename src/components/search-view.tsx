@@ -180,7 +180,7 @@ export function SearchView({ initialQuery, blockedSite }: { initialQuery: string
             {nothing && (
               <Empty
                 title="Nothing found"
-                body="Try a dish name (“lasagna”), an ingredient (“salmon”) or a cuisine (“Thai”). You can also paste a recipe link."
+                body="Try a dish name (“lasagna”), an ingredient (“salmon”) or a cuisine (“Thai”). You can also paste a link from a recipe site, TikTok or Instagram."
               />
             )}
           </Section>

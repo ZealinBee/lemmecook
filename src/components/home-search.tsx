@@ -26,7 +26,7 @@ export function HomeSearch() {
   const { recipes } = useRecipes();
   const account = useAccount();
   const used = useUsage();
-  const { open, importLink, importing, error, setError, suggestPaste, premiumAudio } = useOpenRecipe();
+  const { open, importLink, importing, error, setError, suggestPaste } = useOpenRecipe();
   const [query, setQuery] = useState("");
   const [textMode, setTextMode] = useState(false);
   const [text, setText] = useState("");
@@ -105,9 +105,10 @@ export function HomeSearch() {
               busy={importing}
               onPasteText={handlePastedText}
             />
+            <p className="mt-2 ml-2 text-sm text-muted">Works with TikTok, Instagram and any recipe site.</p>
             <button
               onClick={() => setTextMode(true)}
-              className="mt-2 ml-2 text-sm text-muted underline decoration-line underline-offset-4 active:text-ink"
+              className="mt-1 ml-2 text-sm text-muted underline decoration-line underline-offset-4 active:text-ink"
             >
               Have the recipe text? Paste it instead
             </button>
@@ -129,14 +130,6 @@ export function HomeSearch() {
                   paste it here
                 </button>
                 .
-              </p>
-            )}
-            {premiumAudio && (
-              <p className="mt-2">
-                <Link href="/premium" className="font-medium underline underline-offset-4">
-                  Premium
-                </Link>{" "}
-                listens to the video and writes out the recipe for you.
               </p>
             )}
           </div>
