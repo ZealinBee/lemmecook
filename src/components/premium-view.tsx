@@ -2,7 +2,7 @@
 
 import { Browser } from "@capacitor/browser";
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { ArrowLeftIcon, CheckIcon, SparkIcon } from "@/components/icons";
 import { authHeaders, currentUserId, refreshAccount, useAccount } from "@/lib/account";
 import { isAndroidApp, NATIVE_AUTH_CALLBACK } from "@/lib/native";
@@ -280,8 +280,6 @@ function Notice({ children, tone = "warn" }: { children: React.ReactNode; tone?:
 
 /** Premium is tied to an account so it follows you to every device. */
 function SignIn() {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const redirectTo = () => `${window.location.origin}/premium`;
 
@@ -300,25 +298,6 @@ function SignIn() {
     if (error) setError(error.message);
   }
 
-  async function magicLink(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: redirectTo() },
-    });
-    if (error) setError(error.message);
-    else setSent(true);
-  }
-
-  if (sent) {
-    return (
-      <p className="rounded-2xl bg-paper px-4 py-3 text-center text-ink-soft">
-        Check <b>{email}</b> for a sign-in link, then come back here to finish.
-      </p>
-    );
-  }
-
   return (
     <div>
       <p className="mb-3 text-center text-sm text-muted">Sign in so Premium works on all your devices.</p>
@@ -328,19 +307,6 @@ function SignIn() {
       >
         Continue with Google
       </button>
-      <form onSubmit={magicLink} className="mt-3 flex gap-2">
-        <input
-          type="email"
-          required
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="h-12 min-w-0 flex-1 rounded-full border border-line bg-card px-4 text-[1rem] text-ink outline-none focus:border-clay/60"
-        />
-        <button type="submit" className="h-12 shrink-0 rounded-full border border-line px-5 text-sm font-medium text-ink active:bg-oat">
-          Email me a link
-        </button>
-      </form>
       {error && <p role="alert" className="mt-2 text-center text-sm text-clay-deep">{error}</p>}
     </div>
   );
