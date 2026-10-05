@@ -26,7 +26,7 @@ export function HomeSearch() {
   const { recipes } = useRecipes();
   const account = useAccount();
   const used = useUsage();
-  const { open, importLink, importing, error, setError, suggestPaste } = useOpenRecipe();
+  const { open, importLink, importing, error, setError, suggestPaste, premiumAudio } = useOpenRecipe();
   const [query, setQuery] = useState("");
   const [textMode, setTextMode] = useState(false);
   const [text, setText] = useState("");
@@ -129,6 +129,14 @@ export function HomeSearch() {
                   paste it here
                 </button>
                 .
+              </p>
+            )}
+            {premiumAudio && (
+              <p className="mt-2">
+                <Link href="/premium" className="font-medium underline underline-offset-4">
+                  Premium
+                </Link>{" "}
+                listens to the video and writes out the recipe for you.
               </p>
             )}
           </div>

@@ -213,7 +213,7 @@ export function PremiumView({
                 >
                   {id === "yearly" && !android && (
                     <span className="absolute -top-2.5 right-3 rounded-full bg-clay px-2 py-0.5 text-[0.7rem] font-medium text-white">
-                      Save 17%
+                      Save 30%
                     </span>
                   )}
                   <span className="text-sm text-muted">{p.label}</span>
@@ -222,7 +222,7 @@ export function PremiumView({
                   </span>
                   <span className="mt-1 block text-xs text-muted">
                     per {p.per}
-                    {id === "yearly" && !android && " · $8.33/mo"}
+                    {id === "yearly" && !android && " · $2.08/mo"}
                   </span>
                 </button>
               );

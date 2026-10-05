@@ -1,8 +1,8 @@
 export type PlanId = "monthly" | "yearly";
 
 export const PLANS: Record<PlanId, { priceId: string; playBasePlanId: string; price: string; per: string; label: string }> = {
-  monthly: { priceId: "price_1UMomoLnkm23IhVvR62Kdqre", playBasePlanId: "monthly", price: "$9.99", per: "month", label: "Monthly" },
-  yearly: { priceId: "price_1UMon5Lnkm23IhVvXiX0vCqF", playBasePlanId: "yearly", price: "$99.99", per: "year", label: "Yearly" },
+  monthly: { priceId: "price_1UN7YBLnkm23IhVvB0L87Ob5", playBasePlanId: "monthly", price: "$2.99", per: "month", label: "Monthly" },
+  yearly: { priceId: "price_1UN7YTLnkm23IhVv7yOnttUo", playBasePlanId: "yearly", price: "$24.99", per: "year", label: "Yearly" },
 };
 
 /** The Google Play subscription product; each plan is one of its base plans. */

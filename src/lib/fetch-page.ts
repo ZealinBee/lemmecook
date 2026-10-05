@@ -23,3 +23,28 @@ export function decodeHtml(buf: ArrayBuffer, contentType: string | null): string
     return new TextDecoder("utf-8").decode(buf);
   }
 }
+
+/**
+ * The Wayback Machine's newest good snapshot of a page, for sites that wall off non-browser requests
+ * (e.g. allrecipes.com answers every server fetch with a 402). `id_` serves a capture's original HTML and
+ * status untouched. Recent captures are often the wall itself; then the (slow) index finds the latest 200.
+ */
+export async function fetchArchived(url: URL): Promise<string | undefined> {
+  const snapshot = async (stamp: string) => {
+    const res = await fetch(`https://web.archive.org/web/${stamp}id_/${url}`, { signal: AbortSignal.timeout(15_000) });
+    return res.ok ? decodeHtml(await res.arrayBuffer(), res.headers.get("content-type")) : undefined;
+  };
+  try {
+    const latest = await snapshot(new Date().toISOString().slice(0, 10).replace(/-/g, ""));
+    if (latest) return latest;
+    const index = await fetch(
+      `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(url.toString())}` +
+        "&filter=statuscode:200&fl=timestamp&limit=-1&fastLatest=true",
+      { signal: AbortSignal.timeout(20_000) },
+    );
+    const stamp = index.ok ? (await index.text()).trim() : "";
+    return /^\d{14}$/.test(stamp) ? await snapshot(stamp) : undefined;
+  } catch {
+    return undefined;
+  }
+}

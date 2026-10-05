@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { useAccount } from "@/lib/account";
+import { authHeaders, useAccount } from "@/lib/account";
 import { isSaved, PREMIUM_MAX, saveRecipe } from "@/lib/storage";
 import { canOpenFree, recordOpen } from "@/lib/usage";
 import type { Recipe } from "@/lib/types";
@@ -20,6 +20,8 @@ export function useOpenRecipe() {
   const [error, setError] = useState<string | null>(null);
   /** We couldn't read the page, but the user can still copy the recipe text from it. */
   const [suggestPaste, setSuggestPaste] = useState(false);
+  /** A video Premium could have read the recipe out of. */
+  const [premiumAudio, setPremiumAudio] = useState(false);
 
   const { premium } = useAccount();
 
@@ -55,10 +57,12 @@ export function useOpenRecipe() {
       setImporting(true);
       setError(null);
       setSuggestPaste(false);
+      setPremiumAudio(false);
       try {
         const res = await fetch("/api/parse", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          // Signed in, so the server can tell Premium users apart for video transcription.
+          headers: await authHeaders(),
           body: JSON.stringify({ url }),
         });
         const data = (await res.json()) as {
@@ -69,6 +73,7 @@ export function useOpenRecipe() {
           dish?: string;
           /** A TikTok/Instagram/Facebook caption that's only part of a recipe. */
           text?: string;
+          premiumAudio?: boolean;
         };
         if (data.dish) {
           const from = new URL(url).hostname.replace(/^www\./, "");
@@ -78,6 +83,7 @@ export function useOpenRecipe() {
         }
         if (!res.ok || !data.recipe) {
           setSuggestPaste(!!data.suggestPaste);
+          setPremiumAudio(!!data.premiumAudio);
           setError(data.error ?? "Something went wrong.");
           setImporting(false);
           return data.text;
@@ -91,5 +97,5 @@ export function useOpenRecipe() {
     [allowed, open, router],
   );
 
-  return { open, importLink, importing, error, setError, suggestPaste };
+  return { open, importLink, importing, error, setError, suggestPaste, premiumAudio };
 }

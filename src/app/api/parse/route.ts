@@ -1,7 +1,12 @@
 import { extractRecipe } from "@/lib/parse-recipe";
 import { extractRussianFood } from "@/lib/sites/russianfood";
 import { fetchPost, linkInCaption, recipeFromPost, socialPlatform, tidyCaption, type Platform } from "@/lib/sites/social";
-import { BROWSER_HEADERS, decodeHtml, PRIVATE_HOST } from "@/lib/fetch-page";
+import { BROWSER_HEADERS, decodeHtml, fetchArchived, PRIVATE_HOST } from "@/lib/fetch-page";
+import { requestIsPremium } from "@/lib/premium";
+import { canTranscribe, recipeFromVideo } from "@/lib/video-recipe";
+
+/** Room for downloading and transcribing a video when the caption isn't enough. */
+export const maxDuration = 60;
 
 /** "/recipe/24074/alysias-basic-meat-lasagna/" → "alysias basic meat lasagna". */
 function dishFromUrl(url: URL): string | undefined {
@@ -19,7 +24,7 @@ function dishFromUrl(url: URL): string | undefined {
 }
 
 /** TikTok, Instagram and Facebook have no recipe markup: the recipe, if any, is in the caption. */
-async function importPost(url: URL, platform: Platform): Promise<Response> {
+async function importPost(url: URL, platform: Platform, request: Request): Promise<Response> {
   const post = await fetchPost(url, platform).catch(() => undefined);
   if (!post) {
     return Response.json(
@@ -36,11 +41,21 @@ async function importPost(url: URL, platform: Platform): Promise<Response> {
     const res = await importPage(link);
     if (res.ok) return res;
   }
+
+  // Last resort: listen to the video. It costs us per import, so it's a Premium feature.
+  const audio = canTranscribe(post);
+  const premium = audio && (await requestIsPremium(request));
+  if (premium) {
+    const fromVideo = await recipeFromVideo(post, url.toString());
+    if (fromVideo) return Response.json({ recipe: fromVideo });
+  }
   return Response.json(
     {
       error: `That ${platform} post doesn't write out the whole recipe. Here's its caption. Fill in what's missing from the video.`,
       suggestPaste: true,
       text: tidyCaption(post.caption),
+      /** Free user on a video we could have listened to: worth telling them Premium would. */
+      premiumAudio: audio && !premium,
     },
     { status: 422 },
   );
@@ -59,7 +74,7 @@ export async function POST(request: Request) {
   }
 
   const platform = socialPlatform(url);
-  return platform ? importPost(url, platform) : importPage(url);
+  return platform ? importPost(url, platform, request) : importPage(url);
 }
 
 async function importPage(url: URL): Promise<Response> {
@@ -75,6 +90,10 @@ async function importPage(url: URL): Promise<Response> {
     }
     if (!res.ok) {
       // 401/402/403/429/503 from a live page almost always means a bot wall, not a broken link.
+      // The archived copy is usually readable, and the recipe rarely changes.
+      const archived = await fetchArchived(url);
+      const recipe = archived && (extractRecipe(archived, url.toString()) ?? extractRussianFood(archived, url.toString()));
+      if (recipe) return Response.json({ recipe });
       return Response.json(
         { error: "This site doesn't let apps read its recipes.", suggestPaste: true, dish: dishFromUrl(url) },
         { status: 502 },

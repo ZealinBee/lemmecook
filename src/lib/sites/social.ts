@@ -14,6 +14,8 @@ export type Post = {
   caption: string;
   author?: string;
   image?: string;
+  /** Where to download the video, for transcribing what's said in it. TikTok only for now. */
+  video?: { url: string; headers: Record<string, string> };
 };
 
 export function socialPlatform(url: URL): Platform | undefined {
@@ -29,7 +31,14 @@ const CRAWLER_HEADERS = { ...BROWSER_HEADERS, "User-Agent": "facebookexternalhit
 async function get(url: string, headers: Record<string, string> = BROWSER_HEADERS) {
   const res = await fetch(url, { headers, redirect: "follow", signal: AbortSignal.timeout(12_000) });
   if (!res.ok) return undefined;
-  return { html: decodeHtml(await res.arrayBuffer(), res.headers.get("content-type")), url: res.url };
+  return {
+    html: decodeHtml(await res.arrayBuffer(), res.headers.get("content-type")),
+    url: res.url,
+    cookies: res.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; "),
+  };
 }
 
 function meta(html: string, prop: string): string | undefined {
@@ -60,6 +69,7 @@ async function tiktok(url: URL): Promise<Post | undefined> {
   const page = await get(url.toString()).catch(() => undefined);
   const desc = page?.html.match(/"desc":"((?:[^"\\]|\\.)*)"/)?.[1];
   const cover = page?.html.match(/"(?:originCover|cover)":"((?:[^"\\]|\\.)*)"/)?.[1];
+  const play = page?.html.match(/"playAddr":"((?:[^"\\]|\\.)*)"/)?.[1];
   const oembed = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(page?.url ?? url.toString())}`, {
     signal: AbortSignal.timeout(8_000),
   })
@@ -72,6 +82,10 @@ async function tiktok(url: URL): Promise<Post | undefined> {
     caption,
     author: oembed?.author_name,
     image: oembed?.thumbnail_url ?? (cover ? jsonString(cover) : undefined),
+    // The video CDN only serves requests carrying the cookies the page just set.
+    video: play
+      ? { url: jsonString(play), headers: { ...BROWSER_HEADERS, Referer: "https://www.tiktok.com/", Cookie: page!.cookies } }
+      : undefined,
   };
 }
 
