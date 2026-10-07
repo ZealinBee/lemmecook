@@ -154,9 +154,14 @@ export function parseRecipeText(input: string): Parsed | null {
   // No recognisable headers: sort the body by shape — short quantity-led lines
   // are ingredients, sentences are steps.
   if (!sawHeader) {
-    for (const raw of intro.splice(0)) {
-      const line = stripBullet(raw);
-      if (!line) continue;
+    const body = intro.splice(0).map(stripBullet).filter(Boolean);
+    // Captions open with chatter; the recipe starts at the first run of quantity-led lines.
+    const isQuantity = (line = "") => QUANTITY.test(line) && looksLikeIngredient(line);
+    const start = Math.max(0, body.findIndex((line, i) => isQuantity(line) && isQuantity(body[i + 1])));
+    intro.push(...body.slice(0, start));
+    for (const line of body.slice(start)) {
+      // "Note - these freeze well…" after the method.
+      if (steps.length && /^(notes?|tips?|storage)\s*[-–—:]/i.test(line)) break;
       if (!steps.length && looksLikeIngredient(line)) ingredients.push(line);
       else steps.push({ text: line });
     }
@@ -177,6 +182,12 @@ export function parseRecipeText(input: string): Parsed | null {
   }
 
   if (!steps.length && !ingredients.length) return null;
+
+  // The whole method in one paragraph ("Just fry the onion… Add the seasoning…"): one step per sentence.
+  if (steps.length === 1) {
+    const sentences = steps[0].text.split(/(?<=[.!?])\s+(?=\p{Lu})/u);
+    if (sentences.length >= 3) steps.splice(0, 1, ...sentences.map((text) => ({ text, section: steps[0].section })));
+  }
 
   const meta = intro.join("\n");
   const prep = minutesAfter(meta, /prep(?:aration)?/);

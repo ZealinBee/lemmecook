@@ -133,23 +133,43 @@ function youtubeId(url: URL): string | undefined {
   return id && /^[\w-]{11}$/.test(id) ? id : undefined;
 }
 
+/** The description, from the watch page's inline player data or, failing that, the API the web player loads it from. */
+async function youtubeDescription(id: string): Promise<string | undefined> {
+  const page = await get(`https://www.youtube.com/watch?v=${id}`).catch(() => undefined);
+  const inline = page?.html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)?.[1];
+  if (inline) return jsonString(inline);
+  // Server IPs often get a "confirm you're not a bot" page instead; this endpoint still answers them.
+  const next = await fetch("https://www.youtube.com/youtubei/v1/next?prettyPrint=false", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept-Language": "en-US,en;q=0.9" },
+    body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion: "2.20250101.00.00", hl: "en" } }, videoId: id }),
+    signal: AbortSignal.timeout(10_000),
+  })
+    .then((r) => (r.ok ? r.text() : undefined))
+    .catch(() => undefined);
+  const raw = next?.match(/"attributedDescriptionBodyText":\{"content":"((?:[^"\\]|\\.)*)"/)?.[1];
+  return raw ? jsonString(raw) : undefined;
+}
+
 async function youtube(url: URL): Promise<Post | undefined> {
   const id = youtubeId(url);
   if (!id) return undefined;
-  // Shorts and regular videos share the watch page, whose inline player data has the full description.
-  const page = await get(`https://www.youtube.com/watch?v=${id}`).catch(() => undefined);
-  const desc = page?.html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)?.[1];
-  const title = page?.html.match(/"videoDetails":\{[\s\S]*?"title":"((?:[^"\\]|\\.)*)"/)?.[1];
-  const author = page?.html.match(/"videoDetails":\{[\s\S]*?"author":"((?:[^"\\]|\\.)*)"/)?.[1];
-  const description = desc ? jsonString(desc) : "";
-  const heading = title ? jsonString(title) : "";
+  const [description = "", oembed] = await Promise.all([
+    youtubeDescription(id).catch(() => undefined),
+    fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`, {
+      signal: AbortSignal.timeout(8_000),
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<{ title?: string; author_name?: string }>) : undefined))
+      .catch(() => undefined),
+  ]);
   // Descriptions often open with hashtags; the video title is usually the dish name.
-  const caption = heading && !description.startsWith(heading) ? `${heading}\n${description}` : description;
+  const title = oembed?.title ?? "";
+  const caption = title && !description.startsWith(title) ? `${title}\n${description}` : description;
   if (!caption.trim()) return undefined;
   return {
     platform: "YouTube",
     caption,
-    author: author ? jsonString(author) : undefined,
+    author: oembed?.author_name,
     image: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
   };
 }
