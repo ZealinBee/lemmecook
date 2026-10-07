@@ -22,7 +22,7 @@ function dishFromUrl(url: URL): string | undefined {
   return dish || undefined;
 }
 
-/** TikTok, Instagram and Facebook have no recipe markup: the recipe, if any, is in the caption. */
+/** TikTok, Instagram, Facebook and YouTube have no recipe markup: the recipe, if any, is in the caption or description. */
 async function importPost(url: URL, platform: Platform): Promise<Response> {
   const post = await fetchPost(url, platform).catch(() => undefined);
   if (!post) {

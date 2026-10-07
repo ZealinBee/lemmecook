@@ -39,7 +39,8 @@ function subheading(line: string): string | undefined {
   const s = line.replace(/^#+\s*/, "").replace(/^[*_]+|[*_]+$/g, "").trim();
   if (s.length <= 50 && /:$/.test(s) && !/\d/.test(s)) return s.replace(/:$/, "");
   // Recipe cards often drop the colon: "For the cheese layer".
-  if (s.length <= 40 && /^for (the )?\p{L}/iu.test(s) && !/\d/.test(s)) return s;
+  // "For the chocolate, melt the chips…" is a step, though.
+  if (s.length <= 40 && /^for (the )?\p{L}/iu.test(s) && !/[\d,]/.test(s)) return s;
   return undefined;
 }
 
@@ -99,9 +100,14 @@ export function parseRecipeText(input: string): Parsed | null {
   let mode: "intro" | "ingredients" | "steps" | "notes" = "intro";
   let section: string | undefined;
   let sawHeader = false;
+  // The last step came from an unbulleted line in the current paragraph, so the next line may continue it.
+  let canContinue = false;
 
   for (const raw of lines) {
-    if (!raw) continue;
+    if (!raw) {
+      canContinue = false;
+      continue;
+    }
     const kind = headerKind(raw);
     if (kind) {
       mode = kind;
@@ -120,12 +126,29 @@ export function parseRecipeText(input: string): Parsed | null {
     const sub = subheading(raw);
     if (sub) {
       section = sub;
+      canContinue = false;
       continue;
     }
     const line = stripBullet(raw);
     if (!line || /^step\s*\d+$/i.test(line) || !/\p{L}{2,}/u.test(line)) continue;
-    if (mode === "ingredients") ingredients.push(line);
-    else steps.push({ text: line, section });
+    if (mode === "ingredients") {
+      ingredients.push(line);
+      continue;
+    }
+    // Hard-wrapped text (video descriptions): "Mix the flour, sugar and" / "butter until smooth."
+    const last = steps.at(-1);
+    if (
+      last &&
+      canContinue &&
+      line === raw &&
+      !/[.!?:]$/.test(last.text) &&
+      (/^\p{Ll}/u.test(line) || /,$/.test(last.text))
+    ) {
+      last.text += ` ${line}`;
+      continue;
+    }
+    steps.push({ text: line, section });
+    canContinue = line === raw;
   }
 
   // No recognisable headers: sort the body by shape — short quantity-led lines

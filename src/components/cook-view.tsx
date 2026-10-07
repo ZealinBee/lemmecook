@@ -495,6 +495,7 @@ function StepView({
   const total = recipe.steps.length;
   const chips = findStepTimers(s.text);
   const start = useRef<{ x: number; y: number } | null>(null);
+  const column = useRef<HTMLElement>(null);
 
   const size =
     text.length < 110 ? "text-[2rem] leading-[1.18]" : text.length < 240 ? "text-[1.6rem] leading-[1.25]" : "text-[1.3rem] leading-[1.4]";
@@ -510,7 +511,8 @@ function StepView({
     const dy = e.clientY - from.y;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) return dx < 0 ? onNext() : onPrev();
     if (Math.abs(dx) > 12 || Math.abs(dy) > 12) return; // scrolling, not a tap
-    const rect = e.currentTarget.getBoundingClientRect();
+    // Split against the centered text column so the hints line up on wide screens.
+    const rect = (column.current ?? e.currentTarget).getBoundingClientRect();
     if (e.clientX - rect.left < rect.width * 0.3) onPrev();
     else onNext();
   }
@@ -544,7 +546,7 @@ function StepView({
         role="button"
         aria-label="Tap right for next step, left for previous"
       >
-        <article key={step} className="rise mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-8">
+        <article ref={column} key={step} className="rise mx-auto flex min-h-full max-w-xl flex-col justify-center px-6 py-8">
           {s.section && (
             <p className="mb-3 text-xs font-medium tracking-[0.14em] text-kraft uppercase">{s.section}</p>
           )}

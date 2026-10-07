@@ -6,7 +6,7 @@ import type { Recipe } from "../types";
 
 type Parsed = Omit<Recipe, "id" | "savedAt">;
 
-export type Platform = "TikTok" | "Instagram" | "Facebook";
+export type Platform = "TikTok" | "Instagram" | "Facebook" | "YouTube";
 
 /** A post's caption plus whatever else the platform tells us about it. */
 export type Post = {
@@ -23,6 +23,7 @@ export function socialPlatform(url: URL): Platform | undefined {
   if (/(^|\.)tiktok\.com$/.test(host)) return "TikTok";
   if (/(^|\.)(instagram\.com|instagr\.am)$/.test(host)) return "Instagram";
   if (/(^|\.)(facebook\.com|fb\.watch|fb\.com)$/.test(host)) return "Facebook";
+  if (/(^|\.)(youtube\.com|youtu\.be)$/.test(host)) return "YouTube";
   return undefined;
 }
 
@@ -124,9 +125,39 @@ async function facebook(url: URL): Promise<Post | undefined> {
   };
 }
 
+/** youtu.be/ID, /shorts/ID, /watch?v=ID, /live/ID, /embed/ID. */
+function youtubeId(url: URL): string | undefined {
+  const id = url.hostname.endsWith("youtu.be")
+    ? url.pathname.split("/")[1]
+    : (url.searchParams.get("v") ?? url.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/?#]+)/)?.[1]);
+  return id && /^[\w-]{11}$/.test(id) ? id : undefined;
+}
+
+async function youtube(url: URL): Promise<Post | undefined> {
+  const id = youtubeId(url);
+  if (!id) return undefined;
+  // Shorts and regular videos share the watch page, whose inline player data has the full description.
+  const page = await get(`https://www.youtube.com/watch?v=${id}`).catch(() => undefined);
+  const desc = page?.html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)?.[1];
+  const title = page?.html.match(/"videoDetails":\{[\s\S]*?"title":"((?:[^"\\]|\\.)*)"/)?.[1];
+  const author = page?.html.match(/"videoDetails":\{[\s\S]*?"author":"((?:[^"\\]|\\.)*)"/)?.[1];
+  const description = desc ? jsonString(desc) : "";
+  const heading = title ? jsonString(title) : "";
+  // Descriptions often open with hashtags; the video title is usually the dish name.
+  const caption = heading && !description.startsWith(heading) ? `${heading}\n${description}` : description;
+  if (!caption.trim()) return undefined;
+  return {
+    platform: "YouTube",
+    caption,
+    author: author ? jsonString(author) : undefined,
+    image: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+  };
+}
+
 export async function fetchPost(url: URL, platform: Platform): Promise<Post | undefined> {
   if (platform === "TikTok") return tiktok(url);
   if (platform === "Instagram") return instagram(url);
+  if (platform === "YouTube") return youtube(url);
   return facebook(url);
 }
 
