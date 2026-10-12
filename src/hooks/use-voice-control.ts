@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { KaldiRecognizer, Model } from "vosk-browser";
-import { COMMAND_WORDS } from "@/lib/voice-commands";
+import { afterWakeWord, COMMAND_WORDS } from "@/lib/voice-commands";
 
 /*
  * Two engines behind one hook:
@@ -16,6 +16,8 @@ type Engine = { stop: () => void; reset: () => void };
 type Callbacks = { onText: (text: string) => void; onFatal: (message: string) => void };
 
 const BLOCKED = "Microphone access was blocked. Enable it in your browser settings.";
+// After a bare "chef", how long the next phrase counts as the command.
+const WAKE_WINDOW_MS = 8000;
 
 // ---------- Built-in Web Speech ----------
 
@@ -116,14 +118,6 @@ function loadModel() {
   return modelPromise;
 }
 
-/** Drop [unk] words; return "" when the phrase is mostly unrecognized chatter. */
-function cleanTranscript(text: string): string {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const known = words.filter((w) => w !== UNK);
-  if (!known.length || known.length < words.length / 2) return "";
-  return known.join(" ");
-}
-
 async function startVosk(model: Model, { onText }: Callbacks): Promise<Engine> {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
@@ -137,7 +131,8 @@ async function startVosk(model: Model, { onText }: Callbacks): Promise<Engine> {
     rec = new model.KaldiRecognizer(ctx.sampleRate, GRAMMAR);
     rec.on("result", (msg) => {
       if (msg.event !== "result") return;
-      const text = cleanTranscript(msg.result.text);
+      // Raw, [unk] tokens included — the hook decides what counts as chatter.
+      const text = msg.result.text.trim();
       if (text) onText(text);
     });
   };
@@ -170,8 +165,12 @@ async function startVosk(model: Model, { onText }: Callbacks): Promise<Engine> {
 
 const noopSubscribe = () => () => {};
 
-/** Continuous, hands-free listening. Starts on the built-in recognizer and upgrades to Vosk once it's downloaded. */
-export function useVoiceControl(onTranscript: (text: string) => void) {
+/**
+ * Continuous, hands-free listening. Starts on the built-in recognizer and upgrades to Vosk once it's downloaded.
+ * With `wakeWord` on, only phrases that start with "chef" reach `onTranscript` (minus the wake word);
+ * a bare "chef" opens a short window where the next phrase is taken as the command.
+ */
+export function useVoiceControl(onTranscript: (text: string) => void, { wakeWord = false } = {}) {
   const supported = useSyncExternalStore(
     noopSubscribe,
     () => Boolean(getRecognitionCtor()) || voskSupported(),
@@ -181,15 +180,29 @@ export function useVoiceControl(onTranscript: (text: string) => void) {
   // Only true when there's nothing to listen with until the model arrives (no built-in recognizer).
   const [loading, setLoading] = useState(false);
   const [lastHeard, setLastHeard] = useState("");
+  // True right after a bare "chef", while we wait for the command.
+  const [awaiting, setAwaiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const handler = useRef(onTranscript);
+  const wake = useRef(wakeWord);
+  const armedUntil = useRef(0);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const engine = useRef<Engine | null>(null);
   // Bumped on every start/stop so a slow upgrade can tell it's been cancelled.
   const session = useRef(0);
 
   useEffect(() => {
     handler.current = onTranscript;
+    wake.current = wakeWord;
+    // Switching modes shouldn't leave a half-finished "chef…" hanging.
+    if (!wakeWord) armedUntil.current = 0;
   });
+
+  const disarm = useCallback(() => {
+    armedUntil.current = 0;
+    clearTimeout(armTimer.current);
+    setAwaiting(false);
+  }, []);
 
   const stopEngine = useCallback(() => {
     engine.current?.stop();
@@ -198,12 +211,41 @@ export function useVoiceControl(onTranscript: (text: string) => void) {
 
   const start = useCallback(() => {
     if (engine.current) return;
+    disarm();
     const id = ++session.current;
     const callbacks: Callbacks = {
-      onText: (text) => {
+      onText: (raw) => {
         if (id !== session.current) return;
-        setLastHeard(text);
-        handler.current(text);
+        // Vosk marks words outside the command grammar as [unk]; the built-in recognizer never does.
+        const words = raw.split(/\s+/).filter(Boolean);
+        const known = words.filter((w) => w !== UNK);
+        if (!known.length) return;
+        const text = known.join(" ");
+        let command = text;
+        if (wake.current) {
+          let rest = afterWakeWord(text);
+          // Noise eats the short wake word first. One unrecognized word, then only command words,
+          // is almost certainly "chef, …" with the "chef" swallowed — take it.
+          if (rest === null && words[0] === UNK && known.length === words.length - 1) rest = text;
+          const armed = Date.now() < armedUntil.current;
+          // Not addressed to us — ignore it entirely.
+          if (rest === null && !armed) return;
+          command = rest ?? text;
+          disarm();
+          if (!command) {
+            // Just "chef": wait for the command.
+            armedUntil.current = Date.now() + WAKE_WINDOW_MS;
+            setAwaiting(true);
+            armTimer.current = setTimeout(() => setAwaiting(false), WAKE_WINDOW_MS);
+            setLastHeard("");
+            return;
+          }
+        } else if (known.length < words.length / 2) {
+          // Mostly unrecognized: conversation, the radio.
+          return;
+        }
+        setLastHeard(command);
+        handler.current(command);
       },
       onFatal: (message) => {
         if (id !== session.current) return;
@@ -240,14 +282,15 @@ export function useVoiceControl(onTranscript: (text: string) => void) {
         // Download failed: keep using the built-in recognizer if there is one.
         if (!engine.current) callbacks.onFatal("Couldn't load voice control. Check your connection and try again.");
       });
-  }, [stopEngine]);
+  }, [stopEngine, disarm]);
 
   const stop = useCallback(() => {
     session.current++;
     stopEngine();
+    disarm();
     setLoading(false);
     setListening(false);
-  }, [stopEngine]);
+  }, [stopEngine, disarm]);
 
   const reset = useCallback(() => engine.current?.reset(), []);
 
@@ -256,9 +299,10 @@ export function useVoiceControl(onTranscript: (text: string) => void) {
       session.current++;
       engine.current?.stop();
       engine.current = null;
+      clearTimeout(armTimer.current);
     },
     [],
   );
 
-  return { supported, listening, loading, lastHeard, error, start, stop, reset };
+  return { supported, listening, loading, lastHeard, awaiting: awaiting && wakeWord, error, start, stop, reset };
 }

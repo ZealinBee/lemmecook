@@ -30,6 +30,7 @@ import { formatScale, scaleIngredient, SCALES } from "@/lib/scale";
 import { useTimers, type Timer } from "@/hooks/use-timers";
 import { useVoiceControl } from "@/hooks/use-voice-control";
 import { useWakeLock } from "@/hooks/use-wake-lock";
+import { useWakeWord } from "@/hooks/use-wake-word";
 import { useAccount } from "@/lib/account";
 import type { Recipe } from "@/lib/types";
 import { convertUnits, UNIT_SYSTEMS, type UnitSystem } from "@/lib/units";
@@ -39,6 +40,7 @@ import {
   formatMinutes,
   parseCommand,
   speakDuration,
+  WAKE_WORD,
 } from "@/lib/voice-commands";
 
 type View = "overview" | "steps" | "done";
@@ -196,7 +198,10 @@ function Cook({ recipe }: { recipe: Recipe }) {
     [flash, goTo, timers, total, repeat, speech],
   );
 
-  const voice = useVoiceControl(handleTranscript);
+  // Optional "chef, …" mode: ignore everything that isn't addressed to the app.
+  const [wakeWord, setWakeWord] = useWakeWord();
+  const voice = useVoiceControl(handleTranscript, { wakeWord });
+  const example = wakeWord ? `${WAKE_WORD}, next` : "next";
 
   // While we read aloud the mic hears the speaker; drop that half-heard phrase once reading ends
   // so it doesn't swallow whatever the cook says next.
@@ -219,7 +224,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
       flash("Voice control off");
     } else {
       voice.start();
-      flash("Listening — say “next”");
+      flash(`Listening — say “${example}”`);
     }
   }
 
@@ -237,6 +242,8 @@ function Cook({ recipe }: { recipe: Recipe }) {
       loading={voice.loading}
       supported={voice.supported}
       lastHeard={voice.lastHeard}
+      awaiting={voice.awaiting}
+      example={example}
       error={voice.error}
       onMic={toggleMic}
       onHelp={() => setSheet("help")}
@@ -256,6 +263,8 @@ function Cook({ recipe }: { recipe: Recipe }) {
           onScale={setScale}
           units={units}
           onUnits={setUnits}
+          wakeWord={wakeWord}
+          onWakeWord={voice.supported ? setWakeWord : undefined}
           onStart={startCooking}
         />
       )}
@@ -308,6 +317,13 @@ function Cook({ recipe }: { recipe: Recipe }) {
       </BottomSheet>
 
       <BottomSheet open={sheet === "help"} onClose={() => setSheet(null)} title="Say things like…">
+        {wakeWord && (
+          <p className="mb-3 rounded-2xl bg-clay/10 px-4 py-3 text-sm text-ink-soft">
+            Start each command with <span className="font-medium text-ink">“{WAKE_WORD}”</span> or{" "}
+            <span className="font-medium text-ink">“hey”</span> — for example “{WAKE_WORD}, set a timer for 10 minutes” or
+            “hey, next”. Saying just “{WAKE_WORD}” and pausing works too.
+          </p>
+        )}
         <ul className="grid gap-2 pb-2">
           {[
             ["“Next” / “Done”", "Go to the next step"],
@@ -331,6 +347,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
             </li>
           ))}
         </ul>
+        {voice.supported && <WakeWordSetting checked={wakeWord} onChange={setWakeWord} className="mt-2" />}
         <p className="mt-3 text-center text-xs text-muted">
           Or tap the right side of the screen for next, left for back. Swiping works too.
         </p>
@@ -350,6 +367,8 @@ function Overview({
   onScale,
   units,
   onUnits,
+  wakeWord,
+  onWakeWord,
   onStart,
 }: {
   recipe: Recipe;
@@ -360,6 +379,9 @@ function Overview({
   onScale: (f: number) => void;
   units: UnitSystem;
   onUnits: (u: UnitSystem) => void;
+  wakeWord: boolean;
+  /** Undefined when voice control isn't available here. */
+  onWakeWord?: (on: boolean) => void;
   onStart: (at?: number) => void;
 }) {
   const meta = [
@@ -449,6 +471,13 @@ function Overview({
             ))}
           </ol>
         </section>
+
+        {onWakeWord && (
+          <section className="mt-10">
+            <h2 className="mb-3 font-serif text-2xl">Voice control</h2>
+            <WakeWordSetting checked={wakeWord} onChange={onWakeWord} />
+          </section>
+        )}
       </div>
 
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-ivory via-ivory to-ivory/0 px-4 pt-8">
@@ -461,7 +490,9 @@ function Overview({
             Start cooking · {recipe.steps.length} steps
           </button>
           <p className="mt-2 text-center text-xs text-muted">
-            Voice control turns on when you start · say “read aloud” to hear a step
+            {wakeWord
+              ? `Voice control turns on when you start · say “${WAKE_WORD}, next” or “hey, read aloud”`
+              : "Voice control turns on when you start · say “read aloud” to hear a step"}
           </p>
         </div>
       </div>
@@ -758,6 +789,8 @@ function ControlBar({
   loading,
   supported,
   lastHeard,
+  awaiting,
+  example,
   error,
   onMic,
   onHelp,
@@ -767,6 +800,9 @@ function ControlBar({
   loading: boolean;
   supported: boolean;
   lastHeard: string;
+  awaiting: boolean;
+  /** What to suggest saying, e.g. "next" or "chef, next". */
+  example: string;
   error: string | null;
   onMic: () => void;
   onHelp: () => void;
@@ -777,9 +813,11 @@ function ControlBar({
     : loading
       ? "Loading voice model…"
       : listening
-      ? lastHeard
-        ? `Heard “${lastHeard}”`
-        : "Listening — say “next”"
+      ? awaiting
+        ? "Yes? Say a command…"
+        : lastHeard
+          ? `Heard “${lastHeard}”`
+          : `Listening — say “${example}”`
       : supported
         ? "Voice control off"
         : "Tap to navigate";
@@ -810,6 +848,42 @@ function ControlBar({
         </RoundButton>
       </div>
     </div>
+  );
+}
+
+/** The "only listen after “chef”" toggle; shown on the overview and in the help sheet. */
+function WakeWordSetting({ checked, onChange, className = "" }: { checked: boolean; onChange: (on: boolean) => void; className?: string }) {
+  return (
+    <label className={`flex items-center justify-between gap-4 rounded-2xl bg-paper px-4 py-3 ${className}`}>
+      <span>
+        <span className="block font-medium">Wake word</span>
+        <span className="mt-0.5 block text-xs text-muted">
+          {checked
+            ? `Listens for “${WAKE_WORD}” or “hey” before a command — say “${WAKE_WORD}, next”`
+            : `Only respond after “${WAKE_WORD}” or “hey”, so kitchen chatter is ignored`}
+        </span>
+      </span>
+      <Switch checked={checked} onChange={onChange} label="Require the wake word" />
+    </label>
+  );
+}
+
+function Switch({ checked, onChange, label }: { checked: boolean; onChange: (on: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? "bg-clay" : "bg-oat"}`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 size-6 rounded-full bg-card shadow-sm transition-transform ${
+          checked ? "translate-x-5" : ""
+        }`}
+      />
+    </button>
   );
 }
 

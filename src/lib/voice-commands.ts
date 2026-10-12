@@ -61,6 +61,28 @@ export function parseDuration(text: string): number | undefined {
   return total > 0 ? Math.round(total) : undefined;
 }
 
+/** Said before a command when wake-word mode is on: "chef, next". */
+export const WAKE_WORD = "chef";
+/** Grammar entries for the on-device recognizer: the wake word, how it tends to mishear it, and the "hey" lead-in. */
+export const WAKE_WORDS = ["chef", "jeff", "hey"];
+/*
+ * Lenient on purpose: the wake word is short and the first thing noise or an accent eats, so we accept
+ * anything that sounds like "chef" (chef, chefs, jeff, shef, chief, chuff…) and a bare "hey" ("hey, next"),
+ * anywhere in the phrase, since chatter before it gets glued into the same result.
+ */
+const WAKE_RE = /(?:^|\s)(?:(?:hey|ok|okay)[\s,]+)?(?:(?:ch|sh|j)[aeiou]+(?:ff|f|v|ph)s?(?:'s)?|hey)\b[\s,.!?:;-]*/gi;
+
+/**
+ * Strip the wake word (and anything before it) off a phrase.
+ * "chef, next" → "next" · "hey chef" → "" (wake word alone) · "next" → null (not addressed to us).
+ */
+export function afterWakeWord(text: string): string | null {
+  let last: RegExpMatchArray | null = null;
+  for (const m of text.matchAll(WAKE_RE)) last = m;
+  if (!last) return null;
+  return text.slice((last.index ?? 0) + last[0].length).trim();
+}
+
 /**
  * Every word the commands below listen for. The on-device recognizer is restricted to these, so
  * ordinary conversation comes back as "[unk]" instead of being forced into a command.
@@ -86,6 +108,8 @@ export const COMMAND_WORDS = [
   "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty",
   "fifty", "sixty", "seventy", "eighty", "ninety",
   "first", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+  // wake word (optional "chef, …" mode)
+  ...WAKE_WORDS,
 ];
 
 const TENS: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
