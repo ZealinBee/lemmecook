@@ -66,19 +66,35 @@ export const WAKE_WORD = "chef";
 /** Grammar entries for the on-device recognizer: the wake word, how it tends to mishear it, and the "hey" lead-in. */
 export const WAKE_WORDS = ["chef", "jeff", "hey"];
 /*
- * Lenient on purpose: the wake word is short and the first thing noise or an accent eats, so we accept
- * anything that sounds like "chef" (chef, chefs, jeff, shef, chief, chuff…) and a bare "hey" ("hey, next"),
- * anywhere in the phrase, since chatter before it gets glued into the same result.
+ * Lenient on purpose: the wake word is short and the first thing noise or an accent eats, so for the default
+ * we accept anything that sounds like "chef" (chef, chefs, jeff, shef, chief, chuff…). A bare "hey" ("hey, next")
+ * always works, and the wake word may sit anywhere in the phrase, since chatter before it gets glued into the
+ * same result.
  */
-const WAKE_RE = /(?:^|\s)(?:(?:hey|ok|okay)[\s,]+)?(?:(?:ch|sh|j)[aeiou]+(?:ff|f|v|ph)s?(?:'s)?|hey)\b[\s,.!?:;-]*/gi;
+const CHEF_SOUNDALIKE = "(?:ch|sh|j)[aeiou]+(?:ff|f|v|ph)s?";
+const wakeRes = new Map<string, RegExp>();
+function wakeRe(word: string): RegExp {
+  let re = wakeRes.get(word);
+  if (!re) {
+    const core = word === WAKE_WORD ? CHEF_SOUNDALIKE : word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    re = new RegExp(`(?:^|\\s)(?:(?:hey|ok|okay)[\\s,]+)?(?:${core}(?:'s)?|hey)\\b[\\s,.!?:;-]*`, "gi");
+    wakeRes.set(word, re);
+  }
+  return re;
+}
+
+/** Grammar entries the on-device recognizer needs to hear this wake word. */
+export function wakeGrammarWords(word: string): string[] {
+  return [...WAKE_WORDS, ...word.split(/\s+/).filter(Boolean)];
+}
 
 /**
  * Strip the wake word (and anything before it) off a phrase.
  * "chef, next" → "next" · "hey chef" → "" (wake word alone) · "next" → null (not addressed to us).
  */
-export function afterWakeWord(text: string): string | null {
+export function afterWakeWord(text: string, word = WAKE_WORD): string | null {
   let last: RegExpMatchArray | null = null;
-  for (const m of text.matchAll(WAKE_RE)) last = m;
+  for (const m of text.matchAll(wakeRe(word))) last = m;
   if (!last) return null;
   return text.slice((last.index ?? 0) + last[0].length).trim();
 }

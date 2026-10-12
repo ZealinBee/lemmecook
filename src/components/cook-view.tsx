@@ -198,10 +198,13 @@ function Cook({ recipe }: { recipe: Recipe }) {
     [flash, goTo, timers, total, repeat, speech],
   );
 
-  // Optional "chef, …" mode: ignore everything that isn't addressed to the app.
-  const [wakeWord, setWakeWord] = useWakeWord();
-  const voice = useVoiceControl(handleTranscript, { wakeWord });
-  const example = wakeWord ? `${WAKE_WORD}, next` : "next";
+  // Optional "chef, …" mode: ignore everything that isn't addressed to the app. Premium cooks pick the word.
+  const wake = useWakeWord();
+  const { premium } = useAccount();
+  const wakeWord = wake.enabled;
+  const word = premium ? wake.word : WAKE_WORD;
+  const voice = useVoiceControl(handleTranscript, { wakeWord, word });
+  const example = wakeWord ? `${word}, next` : "next";
 
   // While we read aloud the mic hears the speaker; drop that half-heard phrase once reading ends
   // so it doesn't swallow whatever the cook says next.
@@ -263,8 +266,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
           onScale={setScale}
           units={units}
           onUnits={setUnits}
-          wakeWord={wakeWord}
-          onWakeWord={voice.supported ? setWakeWord : undefined}
+          voice={voice.supported}
           onStart={startCooking}
         />
       )}
@@ -319,9 +321,9 @@ function Cook({ recipe }: { recipe: Recipe }) {
       <BottomSheet open={sheet === "help"} onClose={() => setSheet(null)} title="Say things like…">
         {wakeWord && (
           <p className="mb-3 rounded-2xl bg-clay/10 px-4 py-3 text-sm text-ink-soft">
-            Start each command with <span className="font-medium text-ink">“{WAKE_WORD}”</span> or{" "}
-            <span className="font-medium text-ink">“hey”</span> — for example “{WAKE_WORD}, set a timer for 10 minutes” or
-            “hey, next”. Saying just “{WAKE_WORD}” and pausing works too.
+            Start each command with <span className="font-medium text-ink">“{word}”</span> or{" "}
+            <span className="font-medium text-ink">“hey”</span> — for example “{word}, set a timer for 10 minutes” or
+            “hey, next”. Saying just “{word}” and pausing works too.
           </p>
         )}
         <ul className="grid gap-2 pb-2">
@@ -347,7 +349,7 @@ function Cook({ recipe }: { recipe: Recipe }) {
             </li>
           ))}
         </ul>
-        {voice.supported && <WakeWordSetting checked={wakeWord} onChange={setWakeWord} className="mt-2" />}
+        {voice.supported && <WakeWordSetting className="mt-2" />}
         <p className="mt-3 text-center text-xs text-muted">
           Or tap the right side of the screen for next, left for back. Swiping works too.
         </p>
@@ -367,8 +369,7 @@ function Overview({
   onScale,
   units,
   onUnits,
-  wakeWord,
-  onWakeWord,
+  voice,
   onStart,
 }: {
   recipe: Recipe;
@@ -379,11 +380,11 @@ function Overview({
   onScale: (f: number) => void;
   units: UnitSystem;
   onUnits: (u: UnitSystem) => void;
-  wakeWord: boolean;
-  /** Undefined when voice control isn't available here. */
-  onWakeWord?: (on: boolean) => void;
+  /** Whether voice control is available here. */
+  voice: boolean;
   onStart: (at?: number) => void;
 }) {
+  const { enabled: wakeWord, word } = useWakeWord();
   const meta = [
     { label: "Prep", value: formatMinutes(recipe.prepMinutes), icon: ClockIcon },
     { label: "Cook", value: formatMinutes(recipe.cookMinutes), icon: ClockIcon },
@@ -472,10 +473,10 @@ function Overview({
           </ol>
         </section>
 
-        {onWakeWord && (
+        {voice && (
           <section className="mt-10">
             <h2 className="mb-3 font-serif text-2xl">Voice control</h2>
-            <WakeWordSetting checked={wakeWord} onChange={onWakeWord} />
+            <WakeWordSetting />
           </section>
         )}
       </div>
@@ -491,7 +492,7 @@ function Overview({
           </button>
           <p className="mt-2 text-center text-xs text-muted">
             {wakeWord
-              ? `Voice control turns on when you start · say “${WAKE_WORD}, next” or “hey, read aloud”`
+              ? `Voice control turns on when you start · say “${word}, next” or “hey, read aloud”`
               : "Voice control turns on when you start · say “read aloud” to hear a step"}
           </p>
         </div>
@@ -851,20 +852,76 @@ function ControlBar({
   );
 }
 
-/** The "only listen after “chef”" toggle; shown on the overview and in the help sheet. */
-function WakeWordSetting({ checked, onChange, className = "" }: { checked: boolean; onChange: (on: boolean) => void; className?: string }) {
+/**
+ * The "only listen after “chef”" toggle, plus the custom wake word for Premium cooks.
+ * Shown below the method on the overview and in the help sheet.
+ */
+function WakeWordSetting({ className = "" }: { className?: string }) {
+  const { enabled, setEnabled, custom, word, setCustom } = useWakeWord();
+  const { premium } = useAccount();
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const shown = premium ? word : WAKE_WORD;
+
+  const commit = () => {
+    setEditing(false);
+    setCustom(draft);
+  };
+
   return (
-    <label className={`flex items-center justify-between gap-4 rounded-2xl bg-paper px-4 py-3 ${className}`}>
-      <span>
-        <span className="block font-medium">Wake word</span>
-        <span className="mt-0.5 block text-xs text-muted">
-          {checked
-            ? `Listens for “${WAKE_WORD}” or “hey” before a command — say “${WAKE_WORD}, next”`
-            : `Only respond after “${WAKE_WORD}” or “hey”, so kitchen chatter is ignored`}
+    <div className={`rounded-2xl bg-paper ${className}`}>
+      <label className="flex items-center justify-between gap-4 px-4 py-3">
+        <span>
+          <span className="flex items-center gap-2 font-medium">
+            <MicIcon width={16} height={16} className="text-clay" /> Wake word
+          </span>
+          <span className="mt-0.5 block text-xs text-muted">
+            {enabled
+              ? `Listens for “${shown}” or “hey” before a command — say “${shown}, next”`
+              : `Only respond after “${shown}” or “hey”, so kitchen chatter is ignored`}
+          </span>
         </span>
-      </span>
-      <Switch checked={checked} onChange={onChange} label="Require the wake word" />
-    </label>
+        <Switch checked={enabled} onChange={setEnabled} label="Require the wake word" />
+      </label>
+      <div className="flex items-center justify-between gap-4 border-t border-line/60 px-4 py-3">
+        <span className="text-sm text-ink-soft">Your wake word</span>
+        {editing ? (
+          <input
+            autoFocus
+            type="text"
+            maxLength={24}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label="Custom wake word"
+            placeholder={WAKE_WORD}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            className="h-9 w-36 rounded-full bg-card px-3 text-center text-sm font-medium text-ink shadow-sm outline-none ring-clay focus:ring-2"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (!premium) return router.push("/premium?reason=wake");
+              setDraft(custom);
+              setEditing(true);
+            }}
+            className="flex h-9 items-center gap-1.5 rounded-full bg-card px-4 text-sm font-medium text-ink shadow-sm transition active:scale-95"
+          >
+            “{shown}”
+            {premium ? (
+              <span className="text-xs font-normal text-muted">edit</span>
+            ) : (
+              <SparkIcon width={12} height={12} className="text-clay" aria-label="Premium" />
+            )}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

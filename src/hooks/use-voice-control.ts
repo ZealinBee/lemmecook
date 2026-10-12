@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { KaldiRecognizer, Model } from "vosk-browser";
-import { afterWakeWord, COMMAND_WORDS } from "@/lib/voice-commands";
+import { afterWakeWord, COMMAND_WORDS, WAKE_WORD, wakeGrammarWords } from "@/lib/voice-commands";
 
 /*
  * Two engines behind one hook:
@@ -94,8 +94,10 @@ function startWebSpeech({ onText, onFatal }: Callbacks): Engine | null {
 // Self-hosted in /public so the browser caches it after the first download.
 const MODEL_PATH = "/models/vosk-model-small-en-us-0.15.tar.gz";
 const UNK = "[unk]";
-// Only listen for command words; everything else (conversation, the radio) comes back as [unk].
-const GRAMMAR = JSON.stringify([...COMMAND_WORDS, UNK]);
+// Only listen for command words (and the wake word); everything else (conversation, the radio) comes back as [unk].
+function grammarFor(wakeWord: string) {
+  return JSON.stringify([...new Set([...COMMAND_WORDS, ...wakeGrammarWords(wakeWord)]), UNK]);
+}
 
 function voskSupported() {
   return (
@@ -118,7 +120,7 @@ function loadModel() {
   return modelPromise;
 }
 
-async function startVosk(model: Model, { onText }: Callbacks): Promise<Engine> {
+async function startVosk(model: Model, { onText }: Callbacks, grammar: () => string): Promise<Engine> {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
   });
@@ -128,7 +130,7 @@ async function startVosk(model: Model, { onText }: Callbacks): Promise<Engine> {
   const node = ctx.createScriptProcessor(4096, 1, 1);
   let rec: KaldiRecognizer;
   const makeRecognizer = () => {
-    rec = new model.KaldiRecognizer(ctx.sampleRate, GRAMMAR);
+    rec = new model.KaldiRecognizer(ctx.sampleRate, grammar());
     rec.on("result", (msg) => {
       if (msg.event !== "result") return;
       // Raw, [unk] tokens included — the hook decides what counts as chatter.
@@ -153,7 +155,7 @@ async function startVosk(model: Model, { onText }: Callbacks): Promise<Engine> {
       ctx.close().catch(() => {});
       rec.remove();
     },
-    // Throw away whatever's half-heard and start the next phrase clean.
+    // Throw away whatever's half-heard and start the next phrase clean (with the current grammar).
     reset: () => {
       rec.remove();
       makeRecognizer();
@@ -167,10 +169,13 @@ const noopSubscribe = () => () => {};
 
 /**
  * Continuous, hands-free listening. Starts on the built-in recognizer and upgrades to Vosk once it's downloaded.
- * With `wakeWord` on, only phrases that start with "chef" reach `onTranscript` (minus the wake word);
- * a bare "chef" opens a short window where the next phrase is taken as the command.
+ * With `wakeWord` on, only phrases that start with `word` ("chef" by default) reach `onTranscript` (minus the
+ * wake word); a bare wake word opens a short window where the next phrase is taken as the command.
  */
-export function useVoiceControl(onTranscript: (text: string) => void, { wakeWord = false } = {}) {
+export function useVoiceControl(
+  onTranscript: (text: string) => void,
+  { wakeWord = false, word = WAKE_WORD }: { wakeWord?: boolean; word?: string } = {},
+) {
   const supported = useSyncExternalStore(
     noopSubscribe,
     () => Boolean(getRecognitionCtor()) || voskSupported(),
@@ -185,6 +190,7 @@ export function useVoiceControl(onTranscript: (text: string) => void, { wakeWord
   const [error, setError] = useState<string | null>(null);
   const handler = useRef(onTranscript);
   const wake = useRef(wakeWord);
+  const wakeWordRef = useRef(word);
   const armedUntil = useRef(0);
   const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const engine = useRef<Engine | null>(null);
@@ -194,9 +200,15 @@ export function useVoiceControl(onTranscript: (text: string) => void, { wakeWord
   useEffect(() => {
     handler.current = onTranscript;
     wake.current = wakeWord;
+    wakeWordRef.current = word;
     // Switching modes shouldn't leave a half-finished "chef…" hanging.
     if (!wakeWord) armedUntil.current = 0;
   });
+
+  // The on-device recognizer only hears words in its grammar, so a new wake word needs a fresh recognizer.
+  useEffect(() => {
+    engine.current?.reset();
+  }, [word]);
 
   const disarm = useCallback(() => {
     armedUntil.current = 0;
@@ -223,7 +235,7 @@ export function useVoiceControl(onTranscript: (text: string) => void, { wakeWord
         const text = known.join(" ");
         let command = text;
         if (wake.current) {
-          let rest = afterWakeWord(text);
+          let rest = afterWakeWord(text, wakeWordRef.current);
           // Noise eats the short wake word first. One unrecognized word, then only command words,
           // is almost certainly "chef, …" with the "chef" swallowed — take it.
           if (rest === null && words[0] === UNK && known.length === words.length - 1) rest = text;
@@ -265,7 +277,7 @@ export function useVoiceControl(onTranscript: (text: string) => void, { wakeWord
     }
     setLoading(!engine.current);
     loadModel()
-      .then((model) => (id === session.current ? startVosk(model, callbacks) : null))
+      .then((model) => (id === session.current ? startVosk(model, callbacks, () => grammarFor(wakeWordRef.current)) : null))
       .then((vosk) => {
         if (!vosk) return;
         if (id !== session.current) return vosk.stop();

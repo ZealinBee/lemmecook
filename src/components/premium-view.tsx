@@ -15,6 +15,7 @@ import { resetDate, useUsage } from "@/lib/usage";
 const PERKS = [
   "Unlimited recipes, every month",
   "Convert recipes between metric and US units",
+  "Pick your own wake word for voice control",
   "Remove recipes you're done with",
   `Keep up to ${PREMIUM_MAX} recipes on your device instead of ${FREE_MAX}`,
   "Support an independent cooking app",
@@ -34,7 +35,7 @@ export function PremiumView({
   reason,
   checkoutSuccess,
 }: {
-  reason?: "limit" | "remove" | "convert";
+  reason?: "limit" | "remove" | "convert" | "wake";
   checkoutSuccess: boolean;
 }) {
   const account = useAccount();
@@ -144,6 +145,11 @@ export function PremiumView({
       )}
       {!account.premium && reason === "convert" && (
         <Notice>Converting units is a Premium feature. Switch any recipe to metric or US measures in one tap.</Notice>
+      )}
+      {!account.premium && reason === "wake" && (
+        <Notice>
+          Choosing your own wake word is a Premium feature. Everyone can wake voice control with “chef” or “hey”.
+        </Notice>
       )}
       {syncing && account.signedIn && <Notice tone="calm">Payment received. Unlocking Premium…</Notice>}
 
