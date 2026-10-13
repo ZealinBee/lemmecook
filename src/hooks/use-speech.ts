@@ -1,10 +1,13 @@
 "use client";
 
-import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { isAndroidApp } from "@/lib/native";
 
 const noopSubscribe = () => () => {};
+
+// The plugin touches `window` as soon as it's imported, which would break server rendering (and so
+// what crawlers see). Load it only in the Android app, where it's actually used.
+const nativeTts = () => import("@capacitor-community/text-to-speech").then((m) => m.TextToSpeech);
 
 function synth(): SpeechSynthesis | undefined {
   return typeof window !== "undefined" ? window.speechSynthesis : undefined;
@@ -52,7 +55,7 @@ export function useSpeech() {
   const nativeRun = useRef(0);
 
   useEffect(() => {
-    if (isAndroidApp()) return () => void TextToSpeech.stop().catch(() => {});
+    if (isAndroidApp()) return () => void nativeTts().then((t) => t.stop()).catch(() => {});
     const s = synth();
     if (!s) return;
     const load = () => voices.current.clear();
@@ -66,7 +69,7 @@ export function useSpeech() {
   const stop = useCallback(() => {
     if (isAndroidApp()) {
       nativeRun.current++;
-      TextToSpeech.stop().catch(() => {});
+      nativeTts().then((t) => t.stop()).catch(() => {});
     }
     synth()?.cancel();
     setSpeaking(false);
@@ -86,7 +89,7 @@ export function useSpeech() {
         spoken.current.until = Date.now() + 1200;
       };
       // Android's engine has no per-utterance time limit, so no need to chunk. speak() flushes anything still playing.
-      TextToSpeech.speak({ text, lang: lang ?? navigator.language, rate: 0.95 }).then(done, done);
+      nativeTts().then((t) => t.speak({ text, lang: lang ?? navigator.language, rate: 0.95 })).then(done, done);
       return;
     }
     const s = synth();

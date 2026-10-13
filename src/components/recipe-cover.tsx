@@ -21,10 +21,13 @@ export function RecipeCover({
   recipe,
   className = "",
   variant = "card",
+  alt = "",
 }: {
   recipe: Recipe;
   className?: string;
   variant?: "thumb" | "card" | "hero" | "plain";
+  /** Empty when the title sits right next to the image; set it when the image stands alone. */
+  alt?: string;
 }) {
   // Instagram and Facebook image links expire after a few weeks; fall back to the color card.
   const [broken, setBroken] = useState<string>();
@@ -33,8 +36,8 @@ export function RecipeCover({
       // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote hosts
       <img
         src={recipe.image}
-        alt=""
-        loading="lazy"
+        alt={alt}
+        loading={alt ? "eager" : "lazy"}
         onError={() => setBroken(recipe.image)}
         className={`bg-oat object-cover ${className}`}
       />

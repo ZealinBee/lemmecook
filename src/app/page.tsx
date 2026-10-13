@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { ComponentType, ReactNode, SVGProps } from "react";
+import type { ComponentType, SVGProps } from "react";
 import { HomeSearch } from "@/components/home-search";
 import {
-  AppIcon,
   CheckIcon,
   LinkIcon,
   ListIcon,
@@ -13,7 +12,9 @@ import {
   TimerIcon,
   UsersIcon,
 } from "@/components/icons";
+import { Section, SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { DEFAULT_RECIPES } from "@/lib/default-recipes";
+import { LANDING_PAGES } from "@/lib/landing-pages";
 import { FREE_RECIPES_PER_MONTH, PLANS } from "@/lib/plans";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_OPEN_GRAPH, SITE_TITLE, SITE_URL } from "@/lib/site";
 
@@ -209,13 +210,7 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
 
-      <header className="flex items-center gap-2 px-5 py-3">
-        <AppIcon width={26} height={26} />
-        <span className="font-serif text-[1.35rem] tracking-tight">{SITE_NAME}</span>
-        <Link href="/premium" className="ml-auto rounded-full px-3 py-1.5 text-sm text-muted active:bg-oat">
-          Premium
-        </Link>
-      </header>
+      <SiteHeader />
 
       <section className="rise px-5 pt-8 pb-6">
         <p className="text-xs font-medium tracking-[0.12em] text-clay uppercase">Voice-guided cooking</p>
@@ -289,13 +284,35 @@ export default function Home() {
           intro="Not sure where to start? Open one of these and say “next” to see how voice-guided cooking feels."
         >
           <ul className="flex flex-wrap gap-2">
-            {DEFAULT_RECIPES.map((r) => (
+            {DEFAULT_RECIPES.slice(0, 12).map((r) => (
               <li key={r.id}>
                 <Link
                   href={`/cook/${r.id}`}
                   className="block rounded-full border border-line bg-card px-4 py-2 text-sm text-ink-soft active:bg-oat"
                 >
                   {r.title}
+                </Link>
+              </li>
+            ))}
+            <li>
+              <Link href="/recipes" className="block rounded-full px-4 py-2 text-sm text-clay underline-offset-4 hover:underline">
+                All {DEFAULT_RECIPES.length} recipes
+              </Link>
+            </li>
+          </ul>
+        </Section>
+
+        <Section
+          eyebrow="Learn more"
+          title="Cooking by voice, in depth"
+          intro="Guides to each part of Lemme Cook, and how it compares with smart speakers and recipe apps."
+        >
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {LANDING_PAGES.map((p) => (
+              <li key={p.slug}>
+                <Link href={`/${p.slug}`} className="block h-full rounded-2xl bg-paper px-4 py-3 text-ink-soft active:bg-oat">
+                  {p.navLabel}
+                  <span className="mt-0.5 block text-xs text-muted">{p.headline}</span>
                 </Link>
               </li>
             ))}
@@ -319,33 +336,7 @@ export default function Home() {
         </Section>
       </div>
 
-      <footer className="mt-16 px-5 pt-10 pb-6 text-center text-xs leading-relaxed text-muted">
-        <p>
-          {SITE_NAME} is a hands-free, voice-guided cooking assistant that works in your browser.
-        </p>
-        <p className="mt-1">Search powered by TheMealDB. Allow the microphone for voice control.</p>
-      </footer>
+      <SiteFooter />
     </main>
-  );
-}
-
-function Section({
-  eyebrow,
-  title,
-  intro,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  intro?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section>
-      <p className="text-xs font-medium tracking-[0.12em] text-clay uppercase">{eyebrow}</p>
-      <h2 className="mt-2 font-serif text-[1.9rem] leading-[1.1] tracking-[-0.015em]">{title}</h2>
-      {intro && <p className="mt-3 leading-relaxed text-muted">{intro}</p>}
-      <div className="mt-5">{children}</div>
-    </section>
   );
 }

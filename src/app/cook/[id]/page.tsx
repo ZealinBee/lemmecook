@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { CookView } from "@/components/cook-view";
-import { getDefaultRecipe } from "@/lib/default-recipes";
+import { DEFAULT_RECIPES, getDefaultRecipe } from "@/lib/default-recipes";
 import { SITE_NAME, SITE_OPEN_GRAPH, SITE_URL } from "@/lib/site";
+
+/** Built-in recipes are prerendered at build time; recipes saved on a device still render on demand. */
+export function generateStaticParams() {
+  return DEFAULT_RECIPES.map((r) => ({ id: r.id }));
+}
 
 export async function generateMetadata({ params }: PageProps<"/cook/[id]">): Promise<Metadata> {
   const { id } = await params;

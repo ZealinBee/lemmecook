@@ -407,7 +407,7 @@ function Overview({
 
       <div className="px-4">
         {(recipe.image || recipe.origin === "builtin") && (
-          <RecipeCover recipe={recipe} variant="plain" className="rise aspect-[4/3] w-full rounded-[1.75rem]" />
+          <RecipeCover recipe={recipe} variant="plain" alt={recipe.title} className="rise aspect-[4/3] w-full rounded-[1.75rem]" />
         )}
 
         <header className="rise mt-6" style={{ animationDelay: "60ms" }}>
