@@ -16,6 +16,12 @@ export const SITE_TITLE = "Lemme Cook: Hands-Free, Voice-Guided Cooking";
 export const SITE_DESCRIPTION =
   "Cook hands-free with voice control. Paste any recipe link (TikTok and Instagram too) or text and Lemme Cook guides you step by step: say “next”, set timers, hear steps read aloud, and keep your screen on. No app, no account.";
 
+/** Bump when landing-page or home-page copy changes: it is the sitemap's lastModified for those pages. */
+export const CONTENT_UPDATED = "2026-10-13";
+
+/** Official profiles (app store listing, socials) for the Organization schema's `sameAs`. */
+export const SITE_SAME_AS: string[] = [];
+
 /**
  * Open Graph fields every page shares. A page's `openGraph` replaces its parent's
  * outright, so pages spread this and add their own title, description and url.

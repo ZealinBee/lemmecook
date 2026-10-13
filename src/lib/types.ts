@@ -23,6 +23,9 @@ export type Recipe = {
   cookMinutes?: number;
   totalMinutes?: number;
   tags?: string[];
+  cuisine?: string;
+  /** ISO date the recipe first went live. Only built-in recipes have one. */
+  published?: string;
   ingredients: string[];
   steps: Step[];
   savedAt: number;

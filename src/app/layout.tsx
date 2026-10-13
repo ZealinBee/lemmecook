@@ -34,6 +34,11 @@ export const metadata: Metadata = {
   openGraph: { ...SITE_OPEN_GRAPH, title: SITE_TITLE, description: SITE_DESCRIPTION },
   twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
   appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "default" },
+  // Search Console and Bing Webmaster Tools ownership tags; each is omitted while its env var is unset.
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+    other: process.env.BING_SITE_VERIFICATION ? { "msvalidate.01": process.env.BING_SITE_VERIFICATION } : undefined,
+  },
 };
 
 export const viewport: Viewport = {

@@ -457,7 +457,7 @@ function Overview({
           <h2 className="mb-3 font-serif text-2xl">Method</h2>
           <ol className="grid gap-2">
             {recipe.steps.map((s, i) => (
-              <li key={i}>
+              <li key={i} id={`step-${i + 1}`}>
                 {s.section && s.section !== recipe.steps[i - 1]?.section && (
                   <p className="mt-4 mb-2 text-xs font-medium tracking-[0.12em] text-muted uppercase">{s.section}</p>
                 )}

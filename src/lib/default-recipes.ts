@@ -1,6 +1,11 @@
 import type { Recipe } from "./types";
 
-type Builtin = Omit<Recipe, "savedAt" | "origin" | "siteName"> & { accent: string; tags: string[] };
+type Builtin = Omit<Recipe, "savedAt" | "origin" | "siteName"> & {
+  accent: string;
+  tags: string[];
+  cuisine: string;
+  published: string;
+};
 
 /**
  * House recipes bundled with the app. They work offline and show up on the
@@ -13,6 +18,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/garlic-butter-pasta.jpg",
     description: "Glossy, peppery and on the table in twenty minutes. The pantry dinner that never lets you down.",
     accent: "#d97757",
+    cuisine: "Italian",
+    published: "2026-10-03",
     yield: "2 servings",
     prepMinutes: 5,
     cookMinutes: 15,
@@ -43,6 +50,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/chickpea-curry.jpg",
     description: "Creamy, gently spiced and made almost entirely from cans. Great with rice or warm flatbread.",
     accent: "#c8a07f",
+    cuisine: "Indian",
+    published: "2026-10-03",
     yield: "4 servings",
     prepMinutes: 10,
     cookMinutes: 25,
@@ -78,6 +87,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/lemon-herb-chicken.jpg",
     description: "Crisp-skinned thighs roasted over potatoes that soak up every drop of lemony pan juice.",
     accent: "#788c5d",
+    cuisine: "Mediterranean",
+    published: "2026-10-03",
     yield: "4 servings",
     prepMinutes: 10,
     cookMinutes: 40,
@@ -108,6 +119,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/fluffy-pancakes.jpg",
     description: "Tall, tender and lightly golden. The weekend stack.",
     accent: "#e0b469",
+    cuisine: "American",
+    published: "2026-10-03",
     yield: "10 pancakes",
     prepMinutes: 10,
     cookMinutes: 15,
@@ -140,6 +153,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/tomato-soup.jpg",
     description: "Sweet, smoky roasted tomatoes blended silky smooth. Grilled cheese strongly encouraged.",
     accent: "#c4553a",
+    cuisine: "American",
+    published: "2026-10-03",
     yield: "4 servings",
     prepMinutes: 10,
     cookMinutes: 45,
@@ -170,6 +185,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/soft-scrambled-eggs.jpg",
     description: "Low heat, constant stirring and patience give you creamy, custardy curds.",
     accent: "#e8c547",
+    cuisine: "French",
+    published: "2026-10-03",
     yield: "1 serving",
     prepMinutes: 2,
     cookMinutes: 6,
@@ -197,6 +214,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/egg-fried-rice.jpg",
     description: "The best use for yesterday's rice. Fast, smoky and endlessly adaptable.",
     accent: "#a87b4f",
+    cuisine: "Chinese",
+    published: "2026-10-03",
     yield: "2 servings",
     prepMinutes: 5,
     cookMinutes: 10,
@@ -228,6 +247,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/smashed-potatoes.jpg",
     description: "Creamy inside, shatteringly crisp outside. Boil, smash, roast.",
     accent: "#8a9a5b",
+    cuisine: "American",
+    published: "2026-10-03",
     yield: "4 servings",
     prepMinutes: 5,
     cookMinutes: 50,
@@ -255,6 +276,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/chocolate-chip-cookies.jpg",
     description: "Nutty brown butter, crisp edges and puddles of chocolate.",
     accent: "#7a4a2e",
+    cuisine: "American",
+    published: "2026-10-03",
     yield: "18 cookies",
     prepMinutes: 20,
     cookMinutes: 12,
@@ -287,6 +310,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/shrimp-tacos.jpg",
     description: "Juicy charred shrimp, crunchy slaw and a quick chipotle crema.",
     accent: "#3f7d7a",
+    cuisine: "Mexican",
+    published: "2026-10-03",
     yield: "4 servings",
     prepMinutes: 15,
     cookMinutes: 5,
@@ -319,6 +344,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/banana-bread.jpg",
     description: "Moist, dark and full of banana, with a crackly sugar top. The best use for the bananas nobody ate.",
     accent: "#a0703f",
+    cuisine: "American",
+    published: "2026-10-13",
     yield: "1 loaf, 10 slices",
     prepMinutes: 15,
     cookMinutes: 60,
@@ -353,6 +380,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/overnight-oats.jpg",
     description: "Five minutes tonight, breakfast ready when you wake up. Creamy, lightly sweet and topped with berries.",
     accent: "#b85c6b",
+    cuisine: "American",
+    published: "2026-10-13",
     yield: "1 serving",
     prepMinutes: 5,
     cookMinutes: 0,
@@ -382,6 +411,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/chicken-stir-fry.jpg",
     description: "Tender chicken, crisp vegetables and a glossy garlic-ginger sauce. Faster than delivery.",
     accent: "#c2612e",
+    cuisine: "Chinese",
+    published: "2026-10-13",
     yield: "3 servings",
     prepMinutes: 15,
     cookMinutes: 10,
@@ -417,6 +448,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/beef-chili.jpg",
     description: "Deeply savory, a little smoky and better the next day. Make a big pot and freeze half.",
     accent: "#9b3b2a",
+    cuisine: "Tex-Mex",
+    published: "2026-10-13",
     yield: "6 servings",
     prepMinutes: 15,
     cookMinutes: 60,
@@ -455,6 +488,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/red-lentil-soup.jpg",
     description: "Silky, warming and ready in half an hour from pantry staples. Finish with lemon for brightness.",
     accent: "#d9823b",
+    cuisine: "Middle Eastern",
+    published: "2026-10-13",
     yield: "4 servings",
     prepMinutes: 10,
     cookMinutes: 25,
@@ -490,6 +525,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/lemon-salmon.jpg",
     description: "Flaky salmon under a lemon, garlic and butter glaze. Twenty minutes, one tray.",
     accent: "#e07a5f",
+    cuisine: "Mediterranean",
+    published: "2026-10-13",
     yield: "4 servings",
     prepMinutes: 10,
     cookMinutes: 12,
@@ -521,6 +558,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/pesto-pasta.jpg",
     description: "Bright, nutty and vividly green. The sauce comes together while the pasta cooks.",
     accent: "#5f8a3c",
+    cuisine: "Italian",
+    published: "2026-10-13",
     yield: "4 servings",
     prepMinutes: 10,
     cookMinutes: 12,
@@ -551,6 +590,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/greek-salad.jpg",
     description: "Crunchy cucumber, ripe tomato, briny olives and a slab of feta. No cooking, ten minutes.",
     accent: "#2f6f8f",
+    cuisine: "Greek",
+    published: "2026-10-13",
     yield: "4 servings",
     prepMinutes: 10,
     cookMinutes: 0,
@@ -581,6 +622,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/mac-and-cheese.jpg",
     description: "Ultra creamy, no baking, no breadcrumbs. A proper cheese sauce in the time it takes to boil pasta.",
     accent: "#e5a72e",
+    cuisine: "American",
+    published: "2026-10-13",
     yield: "4 servings",
     prepMinutes: 5,
     cookMinutes: 20,
@@ -611,6 +654,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/french-toast.jpg",
     description: "Custardy inside, golden and crisp outside. Thick slices, a vanilla egg soak and plenty of butter.",
     accent: "#d4a04a",
+    cuisine: "French",
+    published: "2026-10-13",
     yield: "2 servings",
     prepMinutes: 5,
     cookMinutes: 10,
@@ -641,6 +686,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/brownies.jpg",
     description: "Dense, dark and glossy on top, with a chewy edge. One bowl and no mixer.",
     accent: "#4a2c22",
+    cuisine: "American",
+    published: "2026-10-13",
     yield: "16 squares",
     prepMinutes: 15,
     cookMinutes: 25,
@@ -672,6 +719,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/spaghetti-bolognese.jpg",
     description: "A rich meat sauce in under an hour. Simmer while you set the table and say “next” when the pasta's ready.",
     accent: "#b23a2d",
+    cuisine: "Italian",
+    published: "2026-10-13",
     yield: "4 servings",
     prepMinutes: 15,
     cookMinutes: 45,
@@ -709,6 +758,8 @@ const RECIPES: Builtin[] = [
     image: "/recipes/hummus.jpg",
     description: "Smoother than store-bought, with a bright hit of lemon and garlic. Ready in ten minutes.",
     accent: "#c9a66b",
+    cuisine: "Middle Eastern",
+    published: "2026-10-13",
     yield: "6 servings",
     prepMinutes: 10,
     cookMinutes: 0,
@@ -743,6 +794,22 @@ export const DEFAULT_RECIPES: Recipe[] = RECIPES.map((r) => ({
 
 export function getDefaultRecipe(id: string) {
   return DEFAULT_RECIPES.find((r) => r.id === id);
+}
+
+/** Course for schema.org `recipeCategory`, from the first tag that names one. */
+const COURSES: [tag: string, course: string][] = [
+  ["breakfast", "Breakfast"],
+  ["dessert", "Dessert"],
+  ["soup", "Soup"],
+  ["salad", "Salad"],
+  ["side", "Side dish"],
+  ["snack", "Snack"],
+  ["lunch", "Lunch"],
+  ["dinner", "Main course"],
+];
+
+export function recipeCourse(recipe: Recipe) {
+  return COURSES.find(([tag]) => recipe.tags?.includes(tag))?.[1];
 }
 
 export const CATEGORIES = [

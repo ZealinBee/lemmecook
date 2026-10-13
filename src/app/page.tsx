@@ -16,7 +16,7 @@ import { Section, SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { DEFAULT_RECIPES } from "@/lib/default-recipes";
 import { LANDING_PAGES } from "@/lib/landing-pages";
 import { FREE_RECIPES_PER_MONTH, PLANS } from "@/lib/plans";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_OPEN_GRAPH, SITE_TITLE, SITE_URL } from "@/lib/site";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_OPEN_GRAPH, SITE_SAME_AS, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: { absolute: SITE_TITLE },
@@ -165,6 +165,20 @@ const FAQS: { q: string; a: string }[] = [
 ];
 
 const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: SITE_NAME,
+    url: SITE_URL,
+    logo: `${SITE_URL}/apple-icon.png`,
+    sameAs: SITE_SAME_AS.length ? SITE_SAME_AS : undefined,
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: SITE_URL,
+  },
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
